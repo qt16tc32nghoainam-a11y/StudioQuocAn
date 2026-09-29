@@ -9,9 +9,9 @@ APP_DIR=/opt/wedding-admin
 REPO_URL="${REPO_URL:-git@github.com:qt16tc32nghoainam-a11y/StudioQuocAn.git}"
 NODE_MAJOR=20
 
-echo "==> [1/8] Cập nhật hệ thống + gói cơ bản"
+echo "==> [1/8] Cập nhật hệ thống + gói cơ bản (kèm python3 để build website - Cách B)"
 apt-get update -y
-apt-get install -y curl git ca-certificates ufw
+apt-get install -y curl git ca-certificates ufw python3 python3-pip
 
 echo "==> [2/8] Cài Node.js ${NODE_MAJOR}"
 if ! command -v node >/dev/null 2>&1; then
@@ -20,14 +20,16 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 node -v && npm -v
 
-echo "==> [3/8] Cài pm2 + Caddy"
+echo "==> [3/8] Cài pm2 (Caddy cài sau, khi có tên miền)"
 npm install -g pm2
+# Caddy chỉ cần khi gắn tên miền + HTTPS. Lúc chưa có tên miền, truy cập trực tiếp qua IP:cổng.
+# Nếu muốn cài Caddy luôn (bỏ qua nếu lỗi mạng, không chặn cài đặt):
 if ! command -v caddy >/dev/null 2>&1; then
-  apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' > /etc/apt/sources.list.d/caddy-stable.list
-  apt-get update -y
-  apt-get install -y caddy
+  ( apt-get install -y debian-keyring debian-archive-keyring apt-transport-https \
+    && curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg \
+    && curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' > /etc/apt/sources.list.d/caddy-stable.list \
+    && apt-get update -y && apt-get install -y caddy ) \
+    || echo "    (!) Chưa cài được Caddy — không sao, chạy tạm qua IP. Cài lại khi gắn tên miền."
 fi
 
 echo "==> [4/8] Cài Litestream (sao lưu SQLite liên tục)"
@@ -81,18 +83,23 @@ pm2 start "$APP_DIR/deploy/ecosystem.config.js"
 pm2 save
 pm2 startup systemd -u root --hp /root | tail -n 1 | bash || true
 
-# Tường lửa: mở SSH + HTTP + HTTPS
+# Tường lửa: mở SSH + HTTP + HTTPS + cổng app (4100) + cổng website khách xem (8080)
 ufw allow OpenSSH || true
 ufw allow 80/tcp || true
 ufw allow 443/tcp || true
+ufw allow 4100/tcp || true
+ufw allow 8080/tcp || true
 yes | ufw enable || true
 
 echo ""
 echo "======================================================================"
 echo " CÀI ĐẶT XONG PHẦN APP."
-echo " Việc còn lại (làm thủ công, xem deploy/README-DEPLOY.md):"
+echo " Truy cập:"
+echo "   - App quản trị:      http://<IP-VPS>:4100"
+echo "   - Website khách xem: http://<IP-VPS>:8080   (Cách B: VPS tự build & host)"
+echo " Việc còn lại (xem deploy/README-DEPLOY.md):"
 echo "  1) Điền .env: nano $APP_DIR/app/backend/.env  rồi  pm2 restart wedding-admin"
-echo "  2) Cấu hình tên miền + HTTPS: sửa /etc/caddy/Caddyfile, systemctl reload caddy"
-echo "  3) Bật Litestream: điền /etc/litestream.yml + /etc/litestream.env,"
-echo "     rồi enable dịch vụ (xem README-DEPLOY.md phần Litestream)."
+echo "     (nhớ BUILD_SITE_LOCAL=true để website khách xem hoạt động)"
+echo "  2) Gắn tên miền + HTTPS bằng Caddy khi có domain."
+echo "  3) Bật Litestream (sao lưu DB) — xem README-DEPLOY.md."
 echo "======================================================================"

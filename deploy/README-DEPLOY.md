@@ -4,6 +4,25 @@ Phương án: **1 VPS** chạy app ổn định (pm2 tự bật lại khi crash,
 + **Litestream** sao lưu file SQLite liên tục ra cloud storage. Khi VM chết, dựng VM mới rồi
 khôi phục DB từ bản sao lưu → gần như không mất dữ liệu.
 
+## VPS host cả 2 site (Cách B)
+
+VPS chạy **2 thứ** trên 2 cổng khác nhau:
+
+| Site | Cổng | Ai dùng |
+|---|---|---|
+| **App quản trị** (Node) | `4100` | Nội bộ (5 người): quản lý nội dung + khách chụp |
+| **Website khách xem** (tĩnh, build từ `tools/build_site.py`) | `8080` | Khách hàng xem |
+
+Khi bật `BUILD_SITE_LOCAL=true` trong `.env`, mỗi lần bấm **Công bố** trong app:
+sửa `data/*.json` → chạy `build_site.py` → thư mục `_site` được dựng lại → website khách xem
+đổi ngay (không cần Netlify). Cần **python3** trên VPS (setup.sh tự cài).
+
+Truy cập khi chưa có tên miền:
+- App quản trị: `http://IP-VPS:4100`
+- Website khách xem: `http://IP-VPS:8080`
+
+Khi có tên miền, Caddy map: `studioquocan.vn` → cổng 8080, `admin.studioquocan.vn` → cổng 4100.
+
 ## 0. Chuẩn bị
 
 - VPS **Ubuntu 22.04**, 2 vCPU / 2 GB RAM / 20–40 GB SSD (nhà VN như AZDIGI, TinoHost…).

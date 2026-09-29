@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { config } from './config';
 import { initDb } from './db/database';
-import { ensureRepo, assetsDirInRepo } from './website';
+import { ensureRepo, assetsDirInRepo, siteDir, buildSite } from './website';
 
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
@@ -62,6 +62,26 @@ async function main() {
   app.listen(config.port, () => {
     console.log(`Wedding Admin API chạy tại http://localhost:${config.port}`);
   });
+
+  // Cách B: phục vụ website khách xem (thư mục _site đã build) trên 1 cổng riêng.
+  if (config.website.buildLocal) {
+    // Build sẵn 1 lần khi khởi động (nếu _site chưa có).
+    if (!fs.existsSync(siteDir())) {
+      buildSite().then((r) => console.log('[website] Build lần đầu:', r.message)).catch(() => {});
+    }
+    const sitePort = parseInt(process.env.SITE_PORT || '8080', 10);
+    const siteApp = express();
+    siteApp.use((req, res, next) => {
+      // Phục vụ tĩnh từ _site; nếu chưa build thì báo nhẹ nhàng.
+      if (!fs.existsSync(siteDir())) {
+        return res.status(503).send('Website đang được dựng, vui lòng thử lại sau ít phút.');
+      }
+      express.static(siteDir(), { extensions: ['html'] })(req, res, next);
+    });
+    siteApp.listen(sitePort, () => {
+      console.log(`Website khách xem chạy tại http://localhost:${sitePort}`);
+    });
+  }
 }
 
 main().catch((e) => {

@@ -1,22 +1,25 @@
 # Caddy reverse proxy + tự cấp HTTPS (Let's Encrypt).
 # Đặt tại /etc/caddy/Caddyfile, rồi: systemctl reload caddy
 #
-# App quản trị chạy ở subdomain admin.studioquocan.vn (tách khỏi website khách xem).
-# TRƯỚC KHI reload: vào trang quản lý tên miền, tạo bản ghi A:
-#     admin.studioquocan.vn  ->  IP-VPS
-# rồi đợi DNS phân giải đúng (kiểm tra: ping admin.studioquocan.vn ra IP VPS).
-# Caddy cần domain trỏ đúng IP để tự xin chứng chỉ HTTPS.
+# Cách B: VPS host cả 2 site. Trước khi reload, tạo bản ghi A trỏ về IP VPS:
+#     studioquocan.vn        -> IP-VPS   (website khách xem)
+#     www.studioquocan.vn    -> IP-VPS
+#     admin.studioquocan.vn  -> IP-VPS   (app quản trị)
 
+# ---- Website khách xem (build tĩnh, phục vụ ở cổng 8080) ----
+studioquocan.vn, www.studioquocan.vn {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:8080
+}
+
+# ---- App quản trị (Node, cổng 4100) ----
 admin.studioquocan.vn {
     encode zstd gzip
-    # Backend chạy ở cổng 4100 (đã serve luôn giao diện + API).
     reverse_proxy 127.0.0.1:4100
 }
 
 # ------------------------------------------------------------------
-# CHƯA có tên miền / DNS chưa trỏ xong? Dùng tạm bằng IP: bỏ comment khối dưới,
-# comment khối trên lại, rồi truy cập  http://IP-VPS
-# (Chạy IP thì KHÔNG có HTTPS — dùng tạm, mua/trỏ tên miền xong thì đổi lại khối trên.)
-# :80 {
-#     reverse_proxy 127.0.0.1:4100
-# }
+# CHƯA có tên miền? Truy cập tạm bằng IP + cổng, KHÔNG cần Caddy:
+#   - Website khách xem: http://IP-VPS:8080
+#   - App quản trị:      http://IP-VPS:4100
+# Khi có tên miền thì trỏ DNS như trên rồi: systemctl reload caddy

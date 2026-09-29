@@ -12,6 +12,7 @@
  */
 import fs from 'fs';
 import path from 'path';
+import { exec } from 'child_process';
 import simpleGit, { SimpleGit } from 'simple-git';
 import { config } from './config';
 
@@ -154,10 +155,28 @@ export async function saveUpload(filename: string, buffer: Buffer): Promise<stri
   return `/${config.website.uploadsSubdir}/${safe}`;
 }
 
+/** Build website tĩnh từ bản clone repo (chạy tools/build_site.py). Cách B: VPS tự host website. */
+export async function buildSite(): Promise<{ ok: boolean; message: string }> {
+  await ensureRepo();
+  if (!config.website.buildLocal) return { ok: false, message: 'Chưa bật build tại VPS (BUILD_SITE_LOCAL)' };
+  return new Promise((resolve) => {
+    exec(config.website.buildCmd, { cwd: repoDir, timeout: 120000 }, (err, _stdout, stderr) => {
+      if (err) resolve({ ok: false, message: 'Build website lỗi: ' + (stderr || err.message).slice(0, 300) });
+      else resolve({ ok: true, message: 'Đã build lại website tĩnh.' });
+    });
+  });
+}
+
+/** Đường dẫn thư mục _site (website tĩnh đã build) trong bản clone repo. */
+export function siteDir(): string {
+  return path.join(repoDir, config.website.siteSubdir);
+}
+
 export interface PublishResult {
   changed: string[];      // file thay đổi
   commitHash: string | null;
   pushed: boolean;
+  built: boolean;
   message: string;
 }
 
@@ -172,7 +191,9 @@ export async function publish(message: string): Promise<PublishResult> {
   const status = await git.status();
   const changed = [...status.modified, ...status.not_added, ...status.created, ...status.deleted];
   if (changed.length === 0) {
-    return { changed: [], commitHash: null, pushed: false, message: 'Không có thay đổi để công bố' };
+    // Không có thay đổi để commit, nhưng vẫn build lại (đề phòng _site chưa có).
+    const b0 = await buildSite();
+    return { changed: [], commitHash: null, pushed: false, built: b0.ok, message: 'Không có thay đổi để công bố' };
   }
 
   await git.add('.');
@@ -192,14 +213,16 @@ export async function publish(message: string): Promise<PublishResult> {
     pushed = true;
   }
 
-  return {
-    changed,
-    commitHash,
-    pushed,
-    message: pushed
-      ? 'Đã công bố và đẩy lên GitHub. Website sẽ tự cập nhật sau khoảng 1 phút.'
-      : 'Đã lưu (commit) cục bộ. Chưa cấu hình GitHub token nên chưa đẩy lên website thật.',
-  };
+  // Cách B: build lại website tĩnh trên VPS để khách thấy ngay (không chờ Netlify).
+  const build = await buildSite();
+
+  const parts: string[] = [];
+  if (pushed) parts.push('Đã đẩy lên GitHub.');
+  else parts.push('Đã lưu (commit) cục bộ.');
+  if (build.ok) parts.push('Website đã cập nhật.');
+  else if (config.website.buildLocal) parts.push('(Build website lỗi — xem log.)');
+
+  return { changed, commitHash, pushed, built: build.ok, message: parts.join(' ') };
 }
 
 /** Trạng thái repo: đã cấu hình chưa, có thay đổi chưa công bố không. */

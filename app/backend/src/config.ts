@@ -43,5 +43,12 @@ export const config = {
     dataSubdir: 'data',
     // Thư mục chứa ảnh upload trong repo website (khớp với build_site.py)
     uploadsSubdir: 'assets/uploads',
+    // Cách B: VPS tự build website tĩnh và phục vụ cho khách xem.
+    // Bật bằng BUILD_SITE_LOCAL=true. Cần python3 trên máy (build_site.py).
+    buildLocal: process.env.BUILD_SITE_LOCAL === 'true',
+    // Lệnh build (mặc định python3 tools/build_site.py, chạy trong thư mục repo)
+    buildCmd: process.env.BUILD_SITE_CMD || 'python3 tools/build_site.py',
+    // Thư mục kết quả build bên trong repo (build_site.py xuất ra _site)
+    siteSubdir: '_site',
   },
 };
