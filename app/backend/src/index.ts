@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { config } from './config';
 import { initDb } from './db/database';
-import { ensureRepo } from './website';
+import { ensureRepo, assetsDirInRepo } from './website';
 
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
@@ -26,6 +26,13 @@ async function main() {
   app.use(express.json({ limit: '20mb' }));
 
   app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'Wedding Admin API', time: new Date().toISOString() }));
+
+  // Phục vụ ảnh của website (từ bản clone repo) để xem trực tiếp trong app quản trị.
+  // Ảnh cũ /assets/img/... và ảnh upload /assets/uploads/... đều truy cập qua /website-assets/...
+  app.use('/website-assets', async (req, res, next) => {
+    try { await ensureRepo(); } catch { /* vẫn thử phục vụ nếu đã có sẵn */ }
+    express.static(assetsDirInRepo(), { fallthrough: true })(req, res, next);
+  });
 
   app.use('/api/auth', authRoutes);
   app.use('/api/users', userRoutes);

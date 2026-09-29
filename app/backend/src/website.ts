@@ -37,6 +37,12 @@ function uploadsDirInRepo(): string {
   return path.join(repoDir, config.website.uploadsSubdir);
 }
 
+/** Thư mục assets trong bản clone repo website (chứa img/, uploads/, audio/...).
+ *  App phục vụ tĩnh thư mục này để xem ảnh cũ + ảnh vừa upload ngay trong trình quản trị. */
+export function assetsDirInRepo(): string {
+  return path.join(repoDir, 'assets');
+}
+
 /** URL push có nhúng token (nếu có token). */
 function authRemoteUrl(): string {
   const url = config.website.repoUrl;

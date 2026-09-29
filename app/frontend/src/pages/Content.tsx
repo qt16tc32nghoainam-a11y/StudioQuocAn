@@ -8,6 +8,7 @@ import DoiNguEditor from './content/DoiNguEditor';
 import DanhGiaEditor from './content/DanhGiaEditor';
 import TuyenDungEditor from './content/TuyenDungEditor';
 import BoSuuTapEditor from './content/BoSuuTapEditor';
+import BangGiaEditor from './content/BangGiaEditor';
 import JsonEditor from './content/JsonEditor';
 
 interface RepoStatus {
@@ -21,7 +22,7 @@ const TABS: { file: string; label: string; kind: string }[] = [
   { file: 'danh-gia.json', label: '⭐ Đánh giá', kind: 'danhgia' },
   { file: 'tuyen-dung.json', label: '📝 Tuyển dụng', kind: 'tuyendung' },
   { file: 'nhac-nen.json', label: '🎵 Nhạc nền', kind: 'nhacnen' },
-  { file: 'bang-gia.json', label: '💰 Bảng giá', kind: 'json' },
+  { file: 'bang-gia.json', label: '💰 Bảng giá', kind: 'banggia' },
   { file: 'bo-suu-tap.json', label: '📷 Bộ sưu tập', kind: 'bosuutap' },
 ];
 
@@ -117,6 +118,7 @@ function Editor({ tab, onSaved }: { tab: { file: string; kind: string }; onSaved
     case 'danhgia': return <DanhGiaEditor {...props} />;
     case 'tuyendung': return <TuyenDungEditor {...props} />;
     case 'bosuutap': return <BoSuuTapEditor {...props} />;
+    case 'banggia': return <BangGiaEditor {...props} />;
     default: return <JsonEditor {...props} file={tab.file} />;
   }
 }
