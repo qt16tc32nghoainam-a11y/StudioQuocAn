@@ -8,7 +8,7 @@ import {
 } from '../website';
 
 const router = Router();
-router.use(authenticate); // Admin + NhanVien đều được quản lý nội dung
+router.use(authenticate, requireRole('Admin')); // Nội dung website: chỉ Admin
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 

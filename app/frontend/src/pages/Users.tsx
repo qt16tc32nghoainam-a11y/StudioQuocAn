@@ -5,8 +5,11 @@ import { useAuth } from '../lib/auth';
 
 interface User {
   id: string; full_name: string; username: string; email: string; phone?: string;
-  role: 'Admin' | 'NhanVien'; status: string;
+  role: 'Admin' | 'Makeup' | 'Photo'; status: string;
 }
+
+const ROLE_LABEL: Record<string, string> = { Admin: 'Quản trị', Makeup: 'Makeup', Photo: 'Photo' };
+const ROLE_BADGE: Record<string, string> = { Admin: 'badge--amber', Makeup: 'badge--green', Photo: 'badge--blue' };
 
 export default function Users() {
   const { user: me } = useAuth();
@@ -54,7 +57,7 @@ export default function Users() {
     <>
       <div className="page-head">
         <h1>Người dùng</h1>
-        <button className="btn" onClick={() => { setEdit({ role: 'NhanVien' }); setErr(''); }}>+ Thêm người dùng</button>
+        <button className="btn" onClick={() => { setEdit({ role: 'Photo' }); setErr(''); }}>+ Thêm người dùng</button>
       </div>
 
       {!list ? <Spinner /> : (
@@ -67,7 +70,7 @@ export default function Users() {
                   <td><b>{u.full_name}</b>{u.id === me?.id && <span className="muted"> (bạn)</span>}</td>
                   <td className="muted">{u.username}</td>
                   <td className="muted">{u.email}</td>
-                  <td><span className={`badge ${u.role === 'Admin' ? 'badge--amber' : 'badge--blue'}`}>{u.role === 'Admin' ? 'Quản trị' : 'Nhân viên'}</span></td>
+                  <td><span className={`badge ${ROLE_BADGE[u.role] || 'badge--gray'}`}>{ROLE_LABEL[u.role] || u.role}</span></td>
                   <td><StatusBadge status={u.status} /></td>
                   <td>
                     <div className="btn-row">
@@ -106,9 +109,10 @@ export default function Users() {
           </div>
           <div className="field-row">
             <Field label="Vai trò">
-              <select value={edit.role || 'NhanVien'} onChange={(e) => setEdit({ ...edit, role: e.target.value as any })}>
-                <option value="NhanVien">Nhân viên</option>
-                <option value="Admin">Quản trị</option>
+              <select value={edit.role || 'Photo'} onChange={(e) => setEdit({ ...edit, role: e.target.value as any })}>
+                <option value="Photo">Nhân viên Photo</option>
+                <option value="Makeup">Nhân viên Makeup</option>
+                <option value="Admin">Quản trị (Admin)</option>
               </select>
             </Field>
             {edit.id && (

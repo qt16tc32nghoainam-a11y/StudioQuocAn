@@ -41,6 +41,7 @@ export async function initDb(): Promise<void> {
   }
   db.run('PRAGMA foreign_keys = ON;');
   db.run(SCHEMA_SQL); // idempotent: CREATE TABLE IF NOT EXISTS
+  migrateRoles();     // DB cũ (Admin/NhanVien) -> nới CHECK sang Admin/Makeup/Photo
   dirty = true;
   persist();
 
@@ -53,6 +54,47 @@ export async function initDb(): Promise<void> {
 function ensure(): SqlJsDatabase {
   if (!db) throw new Error('DB chưa được khởi tạo. Gọi initDb() trước.');
   return db;
+}
+
+/**
+ * Nới ràng buộc role của bảng users từ ('Admin','NhanVien') sang ('Admin','Makeup','Photo').
+ * SQLite không ALTER được CHECK, nên phải tạo bảng mới rồi copy dữ liệu. An toàn chạy nhiều lần.
+ * NhanVien cũ được chuyển thành Photo.
+ */
+function migrateRoles(): void {
+  if (!db) return;
+  try {
+    const r = db.exec("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'");
+    const ddl = r.length && r[0].values.length ? String(r[0].values[0][0]) : '';
+    if (!ddl || !ddl.includes('NhanVien')) return; // đã là schema mới, bỏ qua
+
+    db.run('PRAGMA foreign_keys = OFF;');
+    db.run('BEGIN');
+    db.run(`CREATE TABLE users_new (
+      id TEXT PRIMARY KEY,
+      full_name TEXT NOT NULL,
+      username TEXT NOT NULL UNIQUE,
+      email TEXT NOT NULL UNIQUE,
+      phone TEXT,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL CHECK (role IN ('Admin','Makeup','Photo')),
+      status TEXT NOT NULL DEFAULT 'Hoạt động' CHECK (status IN ('Hoạt động','Tạm khóa')),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`);
+    db.run(`INSERT INTO users_new (id, full_name, username, email, phone, password_hash, role, status, created_at, updated_at)
+            SELECT id, full_name, username, email, phone, password_hash,
+                   CASE WHEN role = 'NhanVien' THEN 'Photo' ELSE role END,
+                   status, created_at, updated_at FROM users`);
+    db.run('DROP TABLE users');
+    db.run('ALTER TABLE users_new RENAME TO users');
+    db.run('COMMIT');
+    db.run('PRAGMA foreign_keys = ON;');
+    console.log('[migration] Đã chuyển role users sang Admin/Makeup/Photo (NhanVien -> Photo).');
+  } catch (e) {
+    try { db.run('ROLLBACK'); } catch { /* ignore */ }
+    console.error('[migration] Lỗi migrateRoles:', e);
+  }
 }
 
 /** Ghi DB ra file. */

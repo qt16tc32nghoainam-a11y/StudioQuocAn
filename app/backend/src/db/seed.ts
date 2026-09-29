@@ -15,7 +15,7 @@ async function main() {
   await initDb();
   const now = new Date().toISOString();
 
-  function ensureUser(u: { full_name: string; username: string; email: string; phone: string; password: string; role: 'Admin' | 'NhanVien' }) {
+  function ensureUser(u: { full_name: string; username: string; email: string; phone: string; password: string; role: 'Admin' | 'Makeup' | 'Photo' }) {
     const existing = get<{ id: string }>('SELECT id FROM users WHERE username = ? OR email = ?', [u.username, u.email]);
     if (existing) {
       console.log(`- Bỏ qua (đã tồn tại): ${u.username}`);
@@ -30,7 +30,8 @@ async function main() {
   }
 
   ensureUser({ full_name: 'Quản trị viên', username: 'admin', email: 'admin@quocanstudio.vn', phone: '0354501333', password: 'admin123', role: 'Admin' });
-  ensureUser({ full_name: 'Nhân viên', username: 'nhanvien', email: 'nhanvien@quocanstudio.vn', phone: '0334923634', password: '123456', role: 'NhanVien' });
+  ensureUser({ full_name: 'Nhân viên Makeup', username: 'makeup', email: 'makeup@quocanstudio.vn', phone: '0334923634', password: '123456', role: 'Makeup' });
+  ensureUser({ full_name: 'Nhân viên Photo', username: 'photo', email: 'photo@quocanstudio.vn', phone: '0334923635', password: '123456', role: 'Photo' });
 
   // Một khách + buổi chụp + giao hình mẫu để app không trống trơn.
   const hasCustomer = get<{ n: number }>('SELECT COUNT(*) AS n FROM customers');

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { Modal, Field, Spinner, Empty, StatusBadge, money, dateVN } from '../components/ui';
+import { useAuth } from '../lib/auth';
+import PaymentsModal from '../components/PaymentsModal';
 
 interface Shoot {
   id: string; code: string; customer_id: string; customer_name?: string; customer_phone?: string;
@@ -12,6 +14,7 @@ interface Staff { id: string; full_name: string; role: string; }
 interface Customer { id: string; full_name: string; code: string; }
 
 export default function Shoots() {
+  const { isAdmin } = useAuth();
   const [list, setList] = useState<Shoot[] | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -19,6 +22,7 @@ export default function Shoots() {
   const [statusFilter, setStatusFilter] = useState('');
   const [q, setQ] = useState('');
   const [edit, setEdit] = useState<Partial<Shoot> | null>(null);
+  const [pay, setPay] = useState<Shoot | null>(null);
   const [err, setErr] = useState('');
 
   const load = () => {
@@ -59,7 +63,7 @@ export default function Shoots() {
     <>
       <div className="page-head">
         <h1>Buổi chụp</h1>
-        <button className="btn" onClick={openNew}>+ Thêm buổi chụp</button>
+        {isAdmin && <button className="btn" onClick={openNew}>+ Thêm buổi chụp</button>}
       </div>
 
       <div className="toolbar">
@@ -90,8 +94,11 @@ export default function Shoots() {
                   <td><StatusBadge status={s.status || ''} /></td>
                   <td>
                     <div className="btn-row">
-                      <button className="btn btn--ghost btn--sm" onClick={() => { setEdit(s); setErr(''); }}>Sửa</button>
-                      <button className="btn btn--danger btn--sm" onClick={() => remove(s)}>Xóa</button>
+                      {isAdmin ? <>
+                        <button className="btn btn--ghost btn--sm" onClick={() => setPay(s)}>Thu tiền</button>
+                        <button className="btn btn--ghost btn--sm" onClick={() => { setEdit(s); setErr(''); }}>Sửa</button>
+                        <button className="btn btn--danger btn--sm" onClick={() => remove(s)}>Xóa</button>
+                      </> : <span className="muted" style={{ fontSize: 13 }}>Xem</span>}
                     </div>
                   </td>
                 </tr>
@@ -168,6 +175,15 @@ export default function Shoots() {
           </div>
           <Field label="Ghi chú"><textarea value={edit.note || ''} onChange={(e) => setEdit({ ...edit, note: e.target.value })} /></Field>
         </Modal>
+      )}
+
+      {pay && (
+        <PaymentsModal
+          shootId={pay.id}
+          shootLabel={`${pay.customer_name || ''} (${pay.code})`}
+          onClose={() => setPay(null)}
+          onChanged={load}
+        />
       )}
     </>
   );

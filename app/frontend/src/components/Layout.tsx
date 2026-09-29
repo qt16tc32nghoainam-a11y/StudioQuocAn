@@ -7,7 +7,8 @@ const NAV = [
   { to: '/khach-hang', label: 'Khách hàng', ic: '👤' },
   { to: '/buoi-chup', label: 'Buổi chụp', ic: '📅' },
   { to: '/giao-hinh', label: 'Giao hình', ic: '🖼️' },
-  { to: '/noi-dung', label: 'Nội dung website', ic: '🌐' },
+  { to: '/chi-phi', label: 'Chi phí', ic: '💸', adminOnly: true },
+  { to: '/noi-dung', label: 'Nội dung website', ic: '🌐', adminOnly: true },
   { to: '/nguoi-dung', label: 'Người dùng', ic: '🔑', adminOnly: true },
 ];
 
@@ -16,10 +17,13 @@ const TITLES: Record<string, string> = {
   '/khach-hang': 'Khách hàng',
   '/buoi-chup': 'Buổi chụp',
   '/giao-hinh': 'Theo dõi giao hình',
+  '/chi-phi': 'Chi phí',
   '/noi-dung': 'Nội dung website',
   '/nguoi-dung': 'Quản lý người dùng',
   '/doi-mat-khau': 'Đổi mật khẩu',
 };
+
+const ROLE_LABEL: Record<string, string> = { Admin: 'Quản trị viên', Makeup: 'Nhân viên Makeup', Photo: 'Nhân viên Photo' };
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout, isAdmin } = useAuth();
@@ -44,7 +48,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </nav>
         <div className="sidebar__foot">
           <div className="u">{user?.full_name}</div>
-          <div className="r">{user?.role === 'Admin' ? 'Quản trị viên' : 'Nhân viên'}</div>
+          <div className="r">{ROLE_LABEL[user?.role || ''] || user?.role}</div>
           <NavLink to="/doi-mat-khau" style={{ display: 'block', marginTop: 8, color: '#d6cbbb', fontSize: 13 }}>
             Đổi mật khẩu
           </NavLink>

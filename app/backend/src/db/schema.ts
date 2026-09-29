@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL UNIQUE,
   phone TEXT,
   password_hash TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('Admin','NhanVien')),
+  role TEXT NOT NULL CHECK (role IN ('Admin','Makeup','Photo')),
   status TEXT NOT NULL DEFAULT 'Hoạt động' CHECK (status IN ('Hoạt động','Tạm khóa')),
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -102,10 +102,44 @@ CREATE TABLE IF NOT EXISTS deliveries (
   FOREIGN KEY (editor_id) REFERENCES users(id)
 );
 
+-- Thu tiền / đặt cọc theo buổi chụp (nhiều lần: cọc, thu thêm, tất toán)
+CREATE TABLE IF NOT EXISTS payments (
+  id TEXT PRIMARY KEY,
+  shoot_id TEXT NOT NULL,
+  ngay TEXT NOT NULL,               -- ngày thu tiền
+  so_tien REAL NOT NULL,            -- số tiền thu
+  loai TEXT NOT NULL DEFAULT 'Đặt cọc'
+    CHECK (loai IN ('Đặt cọc','Thanh toán thêm','Tất toán')),
+  phuong_thuc TEXT,                 -- Tiền mặt / Chuyển khoản / Khác
+  note TEXT,
+  created_by TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (shoot_id) REFERENCES shoots(id),
+  FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+-- Chi phí studio: theo kỳ (shoot_id NULL) hoặc gắn vào 1 buổi chụp (shoot_id)
+CREATE TABLE IF NOT EXISTS expenses (
+  id TEXT PRIMARY KEY,
+  ngay TEXT NOT NULL,               -- ngày phát sinh chi phí
+  loai TEXT,                        -- Marketing / Thuê xe / Đạo cụ / In ấn / Lương ekip / Khác
+  so_tien REAL NOT NULL,
+  mo_ta TEXT,
+  shoot_id TEXT,                    -- NULL = chi phí chung theo kỳ; có = chi phí của buổi chụp
+  created_by TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (shoot_id) REFERENCES shoots(id),
+  FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_shoots_customer ON shoots(customer_id);
 CREATE INDEX IF NOT EXISTS idx_shoots_date ON shoots(shoot_date);
 CREATE INDEX IF NOT EXISTS idx_shoots_status ON shoots(status);
 CREATE INDEX IF NOT EXISTS idx_deliveries_shoot ON deliveries(shoot_id);
 CREATE INDEX IF NOT EXISTS idx_deliveries_due ON deliveries(due_date);
 CREATE INDEX IF NOT EXISTS idx_publish_created ON publish_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_payments_shoot ON payments(shoot_id);
+CREATE INDEX IF NOT EXISTS idx_payments_ngay ON payments(ngay);
+CREATE INDEX IF NOT EXISTS idx_expenses_ngay ON expenses(ngay);
+CREATE INDEX IF NOT EXISTS idx_expenses_shoot ON expenses(shoot_id);
 `;

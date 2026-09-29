@@ -21,7 +21,7 @@ router.post('/', (req, res) => {
   if (!full_name || !username || !email || !password) {
     return res.status(400).json({ error: 'Thiếu họ tên, tên đăng nhập, email hoặc mật khẩu' });
   }
-  if (!['Admin', 'NhanVien'].includes(role)) return res.status(400).json({ error: 'Vai trò không hợp lệ' });
+  if (!['Admin', 'Makeup', 'Photo'].includes(role)) return res.status(400).json({ error: 'Vai trò không hợp lệ' });
   if (String(password).length < 6) return res.status(400).json({ error: 'Mật khẩu phải từ 6 ký tự' });
 
   const dup = get<{ id: string }>('SELECT id FROM users WHERE username = ? OR email = ?', [username, email]);
@@ -44,7 +44,7 @@ router.put('/:id', (req, res) => {
   if (!user) return res.status(404).json({ error: 'Không tìm thấy người dùng' });
 
   const { full_name, email, phone, role, status } = req.body || {};
-  if (role && !['Admin', 'NhanVien'].includes(role)) return res.status(400).json({ error: 'Vai trò không hợp lệ' });
+  if (role && !['Admin', 'Makeup', 'Photo'].includes(role)) return res.status(400).json({ error: 'Vai trò không hợp lệ' });
   if (status && !['Hoạt động', 'Tạm khóa'].includes(status)) return res.status(400).json({ error: 'Trạng thái không hợp lệ' });
 
   // Không cho Admin tự khóa / tự hạ quyền chính mình (tránh mất quyền quản trị).

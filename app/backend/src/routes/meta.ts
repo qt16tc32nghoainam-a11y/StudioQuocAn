@@ -17,6 +17,9 @@ router.get('/options', (_req, res) => {
     shootTypes: ['Ngoại cảnh', 'Phim trường', 'Studio', 'Concept Beauty', 'Make-up cô dâu', 'Phóng sự cưới', 'Đám hỏi', 'Mâm quả cưới hỏi', 'Gia đình & Baby', 'Khác'],
     sources: ['Facebook', 'Zalo', 'Instagram', 'Giới thiệu', 'Hotline', 'Website', 'Khác'],
     deliveryMethods: ['Google Drive', 'Link tải', 'USB', 'In ảnh', 'Zalo', 'Khác'],
+    paymentTypes: ['Đặt cọc', 'Thanh toán thêm', 'Tất toán'],
+    paymentMethods: ['Tiền mặt', 'Chuyển khoản', 'Khác'],
+    expenseTypes: ['Marketing', 'Thuê xe/di chuyển', 'Đạo cụ/trang phục', 'In ấn', 'Lương ekip', 'Mặt bằng', 'Thiết bị', 'Khác'],
   });
 });
 

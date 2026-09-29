@@ -5,6 +5,13 @@ import { authenticate } from '../middleware/auth';
 
 const router = Router();
 router.use(authenticate);
+// Makeup/Photo chỉ được xem (GET); mọi thao tác ghi chỉ Admin.
+router.use((req, res, next) => {
+  if (req.method !== 'GET' && req.user!.role !== 'Admin') {
+    return res.status(403).json({ error: 'Chỉ Admin được thêm/sửa/xóa khách hàng' });
+  }
+  next();
+});
 
 /** GET /api/customers — danh sách khách, có tìm kiếm ?q= */
 router.get('/', (req, res) => {

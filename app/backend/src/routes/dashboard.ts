@@ -1,9 +1,53 @@
 import { Router } from 'express';
 import { get, all } from '../db/database';
-import { authenticate } from '../middleware/auth';
+import { authenticate, requireRole } from '../middleware/auth';
 
 const router = Router();
 router.use(authenticate);
+
+/** Tính mốc đầu kỳ (YYYY-MM-DD) theo loại kỳ tính từ hôm nay. */
+function periodStart(period: string): { from: string; label: string } {
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (period === 'week') {
+    // Tuần này (bắt đầu Thứ 2)
+    const day = (d.getDay() + 6) % 7; // 0 = Thứ 2
+    d.setDate(d.getDate() - day);
+    return { from: d.toISOString().slice(0, 10), label: 'Tuần này' };
+  }
+  if (period === 'year') {
+    return { from: `${now.getFullYear()}-01-01`, label: `Năm ${now.getFullYear()}` };
+  }
+  // mặc định: tháng này
+  return { from: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`, label: 'Tháng này' };
+}
+
+/**
+ * GET /api/dashboard/finance?period=week|month|year — chỉ Admin.
+ * Doanh thu = tiền thực thu (payments) trong kỳ. Chi phí = expenses trong kỳ. Lợi nhuận = thu - chi.
+ */
+router.get('/finance', requireRole('Admin'), (req, res) => {
+  const period = (req.query.period as string) || 'month';
+  const { from, label } = periodStart(period);
+  const today = new Date().toISOString().slice(0, 10);
+
+  const revenue = get<{ s: number }>('SELECT COALESCE(SUM(so_tien),0) AS s FROM payments WHERE ngay >= ? AND ngay <= ?', [from, today])?.s || 0;
+  const expense = get<{ s: number }>('SELECT COALESCE(SUM(so_tien),0) AS s FROM expenses WHERE ngay >= ? AND ngay <= ?', [from, today])?.s || 0;
+
+  const expenseByType = all('SELECT COALESCE(loai, \'Khác\') AS loai, SUM(so_tien) AS s FROM expenses WHERE ngay >= ? AND ngay <= ? GROUP BY loai ORDER BY s DESC', [from, today]);
+  const revenueByType = all('SELECT loai, SUM(so_tien) AS s FROM payments WHERE ngay >= ? AND ngay <= ? GROUP BY loai', [from, today]);
+
+  // Công nợ: tổng tiền buổi chụp chưa hủy - tổng đã thu (toàn thời gian)
+  const totalContract = get<{ s: number }>("SELECT COALESCE(SUM(total_amount),0) AS s FROM shoots WHERE status != 'Đã hủy'")?.s || 0;
+  const totalPaid = get<{ s: number }>('SELECT COALESCE(SUM(so_tien),0) AS s FROM payments')?.s || 0;
+
+  res.json({
+    period, from, to: today, label,
+    revenue, expense, profit: revenue - expense,
+    expenseByType, revenueByType,
+    receivable: Math.max(0, totalContract - totalPaid),
+  });
+});
 
 /** GET /api/dashboard — số liệu tổng quan cho trang chủ app. */
 router.get('/', (_req, res) => {

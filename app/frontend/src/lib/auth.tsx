@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { api, getToken, setToken } from './api';
 
-export type Role = 'Admin' | 'NhanVien';
+export type Role = 'Admin' | 'Makeup' | 'Photo';
 export interface User {
   id: string;
   full_name: string;

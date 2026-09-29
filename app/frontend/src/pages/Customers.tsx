@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { Modal, Field, Spinner, Empty } from '../components/ui';
+import { useAuth } from '../lib/auth';
 
 interface Customer {
   id: string; code: string; full_name: string; phone?: string; email?: string;
@@ -10,6 +11,7 @@ interface Customer {
 const EMPTY: Partial<Customer> = { full_name: '', phone: '', email: '', address: '', source: '', note: '' };
 
 export default function Customers() {
+  const { isAdmin } = useAuth();
   const [list, setList] = useState<Customer[] | null>(null);
   const [q, setQ] = useState('');
   const [edit, setEdit] = useState<Partial<Customer> | null>(null);
@@ -43,7 +45,7 @@ export default function Customers() {
     <>
       <div className="page-head">
         <h1>Khách hàng</h1>
-        <button className="btn" onClick={() => { setEdit({ ...EMPTY }); setErr(''); }}>+ Thêm khách</button>
+        {isAdmin && <button className="btn" onClick={() => { setEdit({ ...EMPTY }); setErr(''); }}>+ Thêm khách</button>}
       </div>
 
       <div className="toolbar">
@@ -64,8 +66,10 @@ export default function Customers() {
                   <td className="muted">{c.address || '—'}</td>
                   <td>
                     <div className="btn-row">
-                      <button className="btn btn--ghost btn--sm" onClick={() => { setEdit(c); setErr(''); }}>Sửa</button>
-                      <button className="btn btn--danger btn--sm" onClick={() => remove(c)}>Xóa</button>
+                      {isAdmin ? <>
+                        <button className="btn btn--ghost btn--sm" onClick={() => { setEdit(c); setErr(''); }}>Sửa</button>
+                        <button className="btn btn--danger btn--sm" onClick={() => remove(c)}>Xóa</button>
+                      </> : <span className="muted" style={{ fontSize: 13 }}>—</span>}
                     </div>
                   </td>
                 </tr>

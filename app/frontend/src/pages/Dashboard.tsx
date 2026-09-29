@@ -1,7 +1,53 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
-import { Spinner, StatusBadge, dateVN } from '../components/ui';
+import { Spinner, StatusBadge, dateVN, money } from '../components/ui';
+import { useAuth } from '../lib/auth';
+
+interface Finance {
+  label: string; revenue: number; expense: number; profit: number; receivable: number;
+  expenseByType: { loai: string; s: number }[];
+}
+
+function FinancePanel() {
+  const [period, setPeriod] = useState<'week' | 'month' | 'year'>('month');
+  const [f, setF] = useState<Finance | null>(null);
+  useEffect(() => { api.get<Finance>(`/dashboard/finance?period=${period}`).then(setF).catch(() => setF(null)); }, [period]);
+
+  return (
+    <div className="card" style={{ marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+        <h2 style={{ margin: 0 }}>Tài chính {f ? `— ${f.label}` : ''}</h2>
+        <div className="btn-row">
+          {([['week', 'Tuần'], ['month', 'Tháng'], ['year', 'Năm']] as const).map(([k, l]) => (
+            <button key={k} className={`btn btn--sm ${period === k ? '' : 'btn--ghost'}`} onClick={() => setPeriod(k)}>{l}</button>
+          ))}
+        </div>
+      </div>
+      {!f ? <Spinner /> : (
+        <>
+          <div className="grid stat-grid" style={{ marginTop: 14 }}>
+            <div className="card stat"><span className="n" style={{ color: 'var(--green)' }}>{money(f.revenue)}</span><span className="l">Doanh thu (đã thu)</span></div>
+            <div className="card stat"><span className="n" style={{ color: 'var(--red)' }}>{money(f.expense)}</span><span className="l">Chi phí</span></div>
+            <div className="card stat"><span className="n" style={{ color: f.profit >= 0 ? 'var(--gold-dark)' : 'var(--red)' }}>{money(f.profit)}</span><span className="l">Lợi nhuận</span></div>
+            <div className="card stat"><span className="n" style={{ color: 'var(--amber)' }}>{money(f.receivable)}</span><span className="l">Công nợ (khách còn nợ)</span></div>
+          </div>
+          {f.expenseByType.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <b style={{ fontSize: 13.5, color: 'var(--muted)' }}>Chi phí theo loại:</b>
+              <div className="btn-row" style={{ marginTop: 6 }}>
+                {f.expenseByType.map((e) => (
+                  <span key={e.loai} className="badge badge--gray">{e.loai}: {money(e.s)}đ</span>
+                ))}
+              </div>
+            </div>
+          )}
+          <p className="hint" style={{ marginTop: 10 }}>Doanh thu = tiền thực thu (đặt cọc + thanh toán) trong kỳ. Lợi nhuận = doanh thu − chi phí.</p>
+        </>
+      )}
+    </div>
+  );
+}
 
 interface Dash {
   totalCustomers: number;
@@ -15,6 +61,7 @@ interface Dash {
 }
 
 export default function Dashboard() {
+  const { isAdmin } = useAuth();
   const [d, setD] = useState<Dash | null>(null);
 
   useEffect(() => {
@@ -25,6 +72,7 @@ export default function Dashboard() {
 
   return (
     <>
+      {isAdmin && <FinancePanel />}
       <div className="grid stat-grid" style={{ marginBottom: 20 }}>
         <div className="card stat"><span className="n">{d.totalCustomers}</span><span className="l">Khách hàng</span></div>
         <div className="card stat"><span className="n">{d.totalShoots}</span><span className="l">Buổi chụp</span></div>

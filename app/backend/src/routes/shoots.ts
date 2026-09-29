@@ -5,6 +5,13 @@ import { authenticate } from '../middleware/auth';
 
 const router = Router();
 router.use(authenticate);
+// Makeup/Photo chỉ được xem (GET); thêm/sửa/xóa buổi chụp chỉ Admin.
+router.use((req, res, next) => {
+  if (req.method !== 'GET' && req.user!.role !== 'Admin') {
+    return res.status(403).json({ error: 'Chỉ Admin được thêm/sửa/xóa buổi chụp' });
+  }
+  next();
+});
 
 const SHOOT_STATUS = ['Đã đặt lịch', 'Đã chụp', 'Đang xử lý hình', 'Chờ giao', 'Hoàn tất', 'Đã hủy'];
 

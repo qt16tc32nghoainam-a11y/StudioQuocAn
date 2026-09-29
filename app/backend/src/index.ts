@@ -14,6 +14,8 @@ import shootRoutes from './routes/shoots';
 import deliveryRoutes from './routes/deliveries';
 import dashboardRoutes from './routes/dashboard';
 import metaRoutes from './routes/meta';
+import paymentRoutes from './routes/payments';
+import expenseRoutes from './routes/expenses';
 
 async function main() {
   await initDb();
@@ -42,6 +44,8 @@ async function main() {
   app.use('/api/deliveries', deliveryRoutes);
   app.use('/api/dashboard', dashboardRoutes);
   app.use('/api/meta', metaRoutes);
+  app.use('/api/payments', paymentRoutes);
+  app.use('/api/expenses', expenseRoutes);
 
   // Phục vụ frontend đã build (production).
   const staticDir = path.join(__dirname, '../public');

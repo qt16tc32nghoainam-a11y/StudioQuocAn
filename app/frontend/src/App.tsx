@@ -8,6 +8,7 @@ import Shoots from './pages/Shoots';
 import Deliveries from './pages/Deliveries';
 import Content from './pages/Content';
 import Users from './pages/Users';
+import Expenses from './pages/Expenses';
 import ChangePassword from './pages/ChangePassword';
 
 export default function App() {
@@ -23,7 +24,8 @@ export default function App() {
         <Route path="/khach-hang" element={<Customers />} />
         <Route path="/buoi-chup" element={<Shoots />} />
         <Route path="/giao-hinh" element={<Deliveries />} />
-        <Route path="/noi-dung" element={<Content />} />
+        <Route path="/chi-phi" element={isAdmin ? <Expenses /> : <Navigate to="/" />} />
+        <Route path="/noi-dung" element={isAdmin ? <Content /> : <Navigate to="/" />} />
         <Route path="/nguoi-dung" element={isAdmin ? <Users /> : <Navigate to="/" />} />
         <Route path="/doi-mat-khau" element={<ChangePassword />} />
         <Route path="*" element={<Navigate to="/" />} />
