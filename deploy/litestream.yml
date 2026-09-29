@@ -1,0 +1,27 @@
+# Cấu hình Litestream — sao lưu file SQLite liên tục ra cloud storage.
+# Đặt tại /etc/litestream.yml (script cài sẽ chép vào đó).
+#
+# Litestream theo dõi file DB và đẩy các thay đổi (WAL) lên storage gần như realtime.
+# Khi dựng lại VM mới: cài Litestream -> `litestream restore` -> có lại DB gần nhất.
+#
+# Chọn 1 trong 2 kiểu đích lưu (bỏ comment kiểu bạn dùng). Khuyên dùng S3-compatible
+# (AWS S3, hoặc rẻ hơn: Cloudflare R2, Backblaze B2, hay object storage của nhà VN như Vietnix/Bizfly).
+
+dbs:
+  - path: /opt/wedding-admin/data/wedding-admin.db
+    replicas:
+      # ----- Kiểu S3-compatible (khuyên dùng) -----
+      - type: s3
+        # Với AWS S3: chỉ cần bucket + region.
+        # Với R2 / B2 / object storage khác: điền thêm endpoint bên dưới.
+        bucket: TEN-BUCKET-CUA-BAN
+        path: wedding-admin/db
+        region: auto
+        endpoint: https://XXXX.r2.cloudflarestorage.com   # bỏ dòng này nếu dùng AWS S3
+        # access-key-id / secret-access-key: đặt qua biến môi trường trong systemd
+        #   LITESTREAM_ACCESS_KEY_ID / LITESTREAM_SECRET_ACCESS_KEY
+        # để không ghi khóa bí mật vào file này.
+
+      # ----- Hoặc sao lưu ra đĩa/thư mục khác trên cùng máy (đơn giản, nhưng KHÔNG chống VM chết) -----
+      # - type: file
+      #   path: /var/backups/wedding-admin/litestream

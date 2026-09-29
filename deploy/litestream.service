@@ -1,0 +1,23 @@
+# Systemd unit chạy Litestream nền (sao lưu SQLite liên tục).
+# Đặt tại /etc/systemd/system/litestream.service
+#
+# Khóa truy cập storage đặt trong /etc/litestream.env (KHÔNG commit file này lên git).
+# Ví dụ nội dung /etc/litestream.env:
+#   LITESTREAM_ACCESS_KEY_ID=xxxx
+#   LITESTREAM_SECRET_ACCESS_KEY=yyyy
+
+[Unit]
+Description=Litestream - sao luu SQLite lien tuc
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/litestream.env
+ExecStart=/usr/local/bin/litestream replicate -config /etc/litestream.yml
+Restart=always
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target
