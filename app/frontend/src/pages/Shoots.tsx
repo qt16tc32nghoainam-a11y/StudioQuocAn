@@ -21,6 +21,7 @@ export default function Shoots() {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [opts, setOpts] = useState<{ shootStatus: string[]; shootTypes: string[] }>({ shootStatus: [], shootTypes: [] });
   const [statusFilter, setStatusFilter] = useState('');
+  const [monthFilter, setMonthFilter] = useState('all');
   const [q, setQ] = useState('');
   const [edit, setEdit] = useState<Partial<Shoot> | null>(null);
   const [pay, setPay] = useState<Shoot | null>(null);
@@ -62,6 +63,17 @@ export default function Shoots() {
   const photographers = staff.filter((s) => s.role === 'Photo');
   const makeupArtists = staff.filter((s) => s.role === 'Makeup');
 
+  // Nhóm buổi chụp theo tháng (YYYY-MM). Buổi chưa có ngày gom vào "Chưa có ngày".
+  const monthKey = (s: Shoot) => (s.shoot_date ? s.shoot_date.slice(0, 7) : '');
+  const monthLabel = (k: string) => { if (!k) return 'Chưa có ngày chụp'; const [y, m] = k.split('-'); return `Tháng ${parseInt(m, 10)}/${y}`; };
+
+  const months = Array.from(new Set((list || []).map(monthKey))).sort((a, b) => (a < b ? 1 : -1)); // mới -> cũ
+  const shown = (list || []).filter((s) => monthFilter === 'all' || monthKey(s) === monthFilter);
+  const groups: { key: string; items: Shoot[] }[] = [];
+  for (const k of Array.from(new Set(shown.map(monthKey))).sort((a, b) => (a < b ? 1 : -1))) {
+    groups.push({ key: k, items: shown.filter((s) => monthKey(s) === k).sort((a, b) => ((b.shoot_date || '') < (a.shoot_date || '') ? -1 : 1)) });
+  }
+
   return (
     <>
       <div className="page-head">
@@ -70,44 +82,58 @@ export default function Shoots() {
       </div>
 
       <div className="toolbar">
-        <input placeholder="Tìm khách / mã / tiêu đề…" value={q} onChange={(e) => setQ(e.target.value)} style={{ minWidth: 220 }} />
+        <input placeholder="Tìm khách / mã / tiêu đề…" value={q} onChange={(e) => setQ(e.target.value)} style={{ minWidth: 200 }} />
+        <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}>
+          <option value="all">Tất cả tháng</option>
+          {months.map((k) => <option key={k} value={k}>{monthLabel(k)}</option>)}
+        </select>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="">Tất cả trạng thái</option>
           {opts.shootStatus.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
       </div>
 
-      {!list ? <Spinner /> : list.length === 0 ? <Empty text="Chưa có buổi chụp nào." /> : (
-        <div className="card table-wrap">
-          <table>
-            <thead><tr><th>Mã</th><th>Khách</th><th>Ngày chụp</th><th>Loại</th><th>Người chụp</th><th>Tiền</th><th>Trạng thái</th><th></th></tr></thead>
-            <tbody>
-              {list.map((s) => (
-                <tr key={s.id}>
-                  <td className="muted">{s.code}</td>
-                  <td><b>{s.customer_name}</b><div className="muted" style={{ fontSize: 12.5 }}>{s.title || ''}</div></td>
-                  <td>{dateVN(s.shoot_date)}{s.start_time ? <div className="muted" style={{ fontSize: 12 }}>{s.start_time}{s.end_time ? '–' + s.end_time : ''}</div> : null}</td>
-                  <td className="muted">{s.shoot_type || '—'}</td>
-                  <td className="muted">{staffName(s.photographer_id) || '—'}</td>
-                  <td>
-                    {money(s.total_amount)}
-                    {!s.paid_full && (s.deposit_amount ?? 0) > 0 && <div className="muted" style={{ fontSize: 12 }}>Cọc {money(s.deposit_amount)}</div>}
-                    {s.paid_full ? <div style={{ fontSize: 12, color: 'var(--green)' }}>Đã đủ</div> : null}
-                  </td>
-                  <td><StatusBadge status={s.status || ''} /></td>
-                  <td>
-                    <div className="btn-row">
-                      {isAdmin ? <>
-                        <button className="btn btn--ghost btn--sm" onClick={() => setPay(s)}>Thu tiền</button>
-                        <button className="btn btn--ghost btn--sm" onClick={() => { setEdit(s); setErr(''); }}>Sửa</button>
-                        <button className="btn btn--danger btn--sm" onClick={() => remove(s)}>Xóa</button>
-                      </> : <span className="muted" style={{ fontSize: 13 }}>Xem</span>}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {!list ? <Spinner /> : shown.length === 0 ? <Empty text="Không có buổi chụp phù hợp." /> : (
+        <div className="grid" style={{ gap: 16 }}>
+          {groups.map((g) => (
+            <div key={g.key} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+              <div style={{ padding: '12px 16px', background: '#f6efe3', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <b style={{ fontSize: 15, color: 'var(--gold-dark)' }}>📅 {monthLabel(g.key)}</b>
+                <span className="muted" style={{ fontSize: 13 }}>{g.items.length} buổi</span>
+              </div>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>Mã</th><th>Khách</th><th>Ngày chụp</th><th>Loại</th><th>Người chụp</th><th>Tiền</th><th>Trạng thái</th><th></th></tr></thead>
+                  <tbody>
+                    {g.items.map((s) => (
+                      <tr key={s.id}>
+                        <td className="muted">{s.code}</td>
+                        <td><b>{s.customer_name}</b><div className="muted" style={{ fontSize: 12.5 }}>{s.title || ''}</div></td>
+                        <td>{dateVN(s.shoot_date)}{s.start_time ? <div className="muted" style={{ fontSize: 12 }}>{s.start_time}{s.end_time ? '–' + s.end_time : ''}</div> : null}</td>
+                        <td className="muted">{s.shoot_type || '—'}</td>
+                        <td className="muted">{staffName(s.photographer_id) || '—'}</td>
+                        <td>
+                          {money(s.total_amount)}
+                          {!s.paid_full && (s.deposit_amount ?? 0) > 0 && <div className="muted" style={{ fontSize: 12 }}>Cọc {money(s.deposit_amount)}</div>}
+                          {s.paid_full ? <div style={{ fontSize: 12, color: 'var(--green)' }}>Đã đủ</div> : null}
+                        </td>
+                        <td><StatusBadge status={s.status || ''} /></td>
+                        <td>
+                          <div className="btn-row">
+                            {isAdmin ? <>
+                              <button className="btn btn--ghost btn--sm" onClick={() => setPay(s)}>Thu tiền</button>
+                              <button className="btn btn--ghost btn--sm" onClick={() => { setEdit(s); setErr(''); }}>Sửa</button>
+                              <button className="btn btn--danger btn--sm" onClick={() => remove(s)}>Xóa</button>
+                            </> : <span className="muted" style={{ fontSize: 13 }}>Xem</span>}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
