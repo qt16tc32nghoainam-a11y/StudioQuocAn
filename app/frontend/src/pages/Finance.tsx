@@ -24,22 +24,26 @@ export default function Finance() {
   return (
     <>
       <div className="toolbar" style={{ justifyContent: 'space-between' }}>
-        <div className="btn-row">
-          <button className={`btn btn--sm ${tab === 'profit' ? '' : 'btn--ghost'}`} onClick={() => setTab('profit')}>Lợi nhuận theo buổi</button>
-          <button className={`btn btn--sm ${tab === 'cash' ? '' : 'btn--ghost'}`} onClick={() => setTab('cash')}>Sổ quỹ</button>
+        <div className="segment" role="tablist" aria-label="Loại báo cáo">
+          <button role="tab" aria-selected={tab === 'profit'} className={tab === 'profit' ? 'active' : ''} onClick={() => setTab('profit')}>Lợi nhuận theo buổi</button>
+          <button role="tab" aria-selected={tab === 'cash'} className={tab === 'cash' ? 'active' : ''} onClick={() => setTab('cash')}>Sổ quỹ</button>
         </div>
-        <div className="btn-row">
+        <div className="segment" role="tablist" aria-label="Chọn kỳ">
           {PERIODS.map(([k, l]) => (
-            <button key={k} className={`btn btn--sm ${period === k ? '' : 'btn--ghost'}`} onClick={() => setPeriod(k)}>{l}</button>
+            <button key={k} role="tab" aria-selected={period === k} className={period === k ? 'active' : ''} onClick={() => setPeriod(k)}>{l}</button>
           ))}
         </div>
       </div>
+
+      {(() => { const lbl = tab === 'profit' ? profit?.label : cash?.label; return lbl ? (
+        <div className="period-label"><span className="period-label__dot" />Đang xem: <b>{lbl}</b></div>
+      ) : null; })()}
 
       {tab === 'profit' ? (
         !profit ? <Spinner /> : (
           <>
             <div className="grid stat-grid" style={{ marginBottom: 16 }}>
-              <div className="card stat"><span className="n" style={{ color: 'var(--green)' }}>{money(profit.totalRevenue)}</span><span className="l">Đã thu ({profit.label})</span></div>
+              <div className="card stat"><span className="n" style={{ color: 'var(--green)' }}>{money(profit.totalRevenue)}</span><span className="l">Đã thu</span></div>
               <div className="card stat"><span className="n" style={{ color: 'var(--red)' }}>{money(profit.totalCost)}</span><span className="l">Chi phí gắn buổi</span></div>
               <div className="card stat"><span className="n" style={{ color: profit.totalProfit >= 0 ? 'var(--gold-dark)' : 'var(--red)' }}>{money(profit.totalProfit)}</span><span className="l">Lợi nhuận</span></div>
             </div>
@@ -69,7 +73,7 @@ export default function Finance() {
         !cash ? <Spinner /> : (
           <>
             <div className="grid stat-grid" style={{ marginBottom: 16 }}>
-              <div className="card stat"><span className="n" style={{ color: 'var(--green)' }}>{money(cash.totalIn)}</span><span className="l">Tổng thu ({cash.label})</span></div>
+              <div className="card stat"><span className="n" style={{ color: 'var(--green)' }}>{money(cash.totalIn)}</span><span className="l">Tổng thu</span></div>
               <div className="card stat"><span className="n" style={{ color: 'var(--red)' }}>{money(cash.totalOut)}</span><span className="l">Tổng chi</span></div>
               <div className="card stat"><span className="n" style={{ color: cash.balance >= 0 ? 'var(--gold-dark)' : 'var(--red)' }}>{money(cash.balance)}</span><span className="l">Số dư kỳ</span></div>
             </div>
