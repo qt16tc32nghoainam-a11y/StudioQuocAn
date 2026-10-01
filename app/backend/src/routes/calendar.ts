@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import { all, get, run, persist } from '../db/database';
-import { authenticate } from '../middleware/auth';
+import { authenticate, requireRole } from '../middleware/auth';
 import { shootScope } from '../utils/scope';
 import { config } from '../config';
 import { AuthUser } from '../types';
@@ -133,8 +133,8 @@ router.get('/', (req, res) => {
   res.json(all(sql, params));
 });
 
-/** GET /api/calendar/my-feed-url — link ICS của chính mình (tự tạo token nếu chưa có). */
-router.get('/my-feed-url', (req, res) => {
+/** GET /api/calendar/my-feed-url — link ICS (chỉ Admin). */
+router.get('/my-feed-url', requireRole('Admin'), (req, res) => {
   let u = get<any>('SELECT calendar_token FROM users WHERE id = ?', [req.user!.id]);
   let token = u?.calendar_token;
   if (!token) {
@@ -145,8 +145,8 @@ router.get('/my-feed-url', (req, res) => {
   res.json({ url: `/api/calendar/feed/${token}.ics` });
 });
 
-/** POST /api/calendar/reset-token — đổi token (thu hồi link cũ). */
-router.post('/reset-token', (req, res) => {
+/** POST /api/calendar/reset-token — đổi token (chỉ Admin). */
+router.post('/reset-token', requireRole('Admin'), (req, res) => {
   const token = uuid().replace(/-/g, '') + uuid().replace(/-/g, '');
   run('UPDATE users SET calendar_token = ? WHERE id = ?', [token, req.user!.id]);
   persist();

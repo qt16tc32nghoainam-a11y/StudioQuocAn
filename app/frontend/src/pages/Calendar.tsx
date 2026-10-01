@@ -157,7 +157,7 @@ export default function Calendar() {
               {v === 'month' ? 'Tháng' : v === 'week' ? 'Tuần' : 'Ngày'}
             </button>
           ))}
-          <button className="btn btn--ghost btn--sm" onClick={() => setShowGoogle(true)}>📅 Kết nối Google Calendar</button>
+          {isAdmin && <button className="btn btn--ghost btn--sm" onClick={() => setShowGoogle(true)}>📅 Kết nối Google Calendar</button>}
         </div>
       </div>
 
