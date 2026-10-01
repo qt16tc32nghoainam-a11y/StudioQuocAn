@@ -67,3 +67,37 @@ export function dateVN(s?: string | null): string {
   const m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
 }
+
+export type PeriodKind = 'week' | 'month' | 'year' | 'custom';
+export interface PeriodState { period: PeriodKind; from: string; to: string }
+
+/** Build query string ?period=...&from=...&to=... cho API dashboard. */
+export function periodQuery(p: PeriodState): string {
+  if (p.period === 'custom' && p.from && p.to) return `period=custom&from=${p.from}&to=${p.to}`;
+  return `period=${p.period}`;
+}
+
+/**
+ * Bộ lọc thời gian dùng chung: Tuần / Tháng / Năm / Tùy chọn (từ ngày – đến ngày).
+ * Khi chọn "Tùy chọn" hiện 2 ô ngày; chỉ gọi lại khi đã nhập đủ cả 2.
+ */
+export function PeriodFilter({ value, onChange }: { value: PeriodState; onChange: (v: PeriodState) => void }) {
+  const opts: [PeriodKind, string][] = [['week', 'Tuần'], ['month', 'Tháng'], ['year', 'Năm'], ['custom', 'Tùy chọn']];
+  return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="segment" role="tablist" aria-label="Chọn kỳ">
+        {opts.map(([k, l]) => (
+          <button key={k} role="tab" aria-selected={value.period === k} className={value.period === k ? 'active' : ''}
+            onClick={() => onChange({ ...value, period: k })}>{l}</button>
+        ))}
+      </div>
+      {value.period === 'custom' && (
+        <div className="daterange">
+          <input type="date" value={value.from} max={value.to || undefined} onChange={(e) => onChange({ ...value, from: e.target.value })} aria-label="Từ ngày" />
+          <span className="daterange__sep">→</span>
+          <input type="date" value={value.to} min={value.from || undefined} onChange={(e) => onChange({ ...value, to: e.target.value })} aria-label="Đến ngày" />
+        </div>
+      )}
+    </div>
+  );
+}

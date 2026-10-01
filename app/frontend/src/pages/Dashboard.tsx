@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
-import { Spinner, StatusBadge, dateVN, money } from '../components/ui';
+import { Spinner, StatusBadge, dateVN, money, PeriodFilter, periodQuery, type PeriodState } from '../components/ui';
 import { useAuth } from '../lib/auth';
 
 interface Finance {
@@ -10,17 +10,23 @@ interface Finance {
 }
 
 function FinancePanel() {
-  const [period, setPeriod] = useState<'week' | 'month' | 'year'>('month');
+  const [pf, setPf] = useState<PeriodState>({ period: 'month', from: '', to: '' });
   const [f, setF] = useState<Finance | null>(null);
-  useEffect(() => { api.get<Finance>(`/dashboard/finance?period=${period}`).then(setF).catch(() => setF(null)); }, [period]);
+  useEffect(() => {
+    // Chế độ tùy chọn: chỉ gọi khi đã nhập đủ cả 2 ngày.
+    if (pf.period === 'custom' && (!pf.from || !pf.to)) { setF(null); return; }
+    api.get<Finance>(`/dashboard/finance?${periodQuery(pf)}`).then(setF).catch(() => setF(null));
+  }, [pf]);
 
   return (
     <div className="card" style={{ marginBottom: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
         <h2 style={{ margin: 0 }}>Tài chính</h2>
-        <PeriodSegment value={period} onChange={setPeriod} />
+        <PeriodFilter value={pf} onChange={setPf} />
       </div>
-      {!f ? <Spinner /> : (
+      {pf.period === 'custom' && (!pf.from || !pf.to) ? (
+        <p className="hint" style={{ marginTop: 14 }}>Chọn <b>từ ngày</b> và <b>đến ngày</b> để xem số liệu trong khoảng.</p>
+      ) : !f ? <Spinner /> : (
         <>
           <div className="period-label" style={{ marginTop: 14 }}><span className="period-label__dot" />Đang xem: <b>{f.label}</b></div>
           <div className="fin-row">
@@ -46,16 +52,7 @@ function FinancePanel() {
   );
 }
 
-/** Bộ lọc kỳ dạng segmented control (liền khối, có con trượt). */
-function PeriodSegment({ value, onChange }: { value: 'week' | 'month' | 'year'; onChange: (v: 'week' | 'month' | 'year') => void }) {
-  return (
-    <div className="segment" role="tablist" aria-label="Chọn kỳ">
-      {([['week', 'Tuần'], ['month', 'Tháng'], ['year', 'Năm']] as const).map(([k, l]) => (
-        <button key={k} role="tab" aria-selected={value === k} className={value === k ? 'active' : ''} onClick={() => onChange(k)}>{l}</button>
-      ))}
-    </div>
-  );
-}
+
 
 interface Dash {
   totalCustomers: number;

@@ -16,8 +16,15 @@ const vn = (s: string) => { const [y, m, dd] = s.split('-'); return `${dd}/${m}/
  *  - month: ngày 1 → ngày cuối tháng hiện tại
  *  - year:  01/01 → 31/12 năm hiện tại
  */
-function periodRange(period: string): { from: string; to: string; label: string } {
+function periodRange(period: string, customFrom?: string, customTo?: string): { from: string; to: string; label: string } {
   const now = new Date();
+  // Khoảng ngày tùy chọn (ưu tiên nếu hợp lệ YYYY-MM-DD).
+  const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+  if (period === 'custom' && customFrom && customTo && dateRe.test(customFrom) && dateRe.test(customTo)) {
+    const from = customFrom <= customTo ? customFrom : customTo;
+    const to = customFrom <= customTo ? customTo : customFrom; // tự đảo nếu nhập ngược
+    return { from, to, label: `${vn(from)} – ${vn(to)}` };
+  }
   if (period === 'week') {
     const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const day = (d.getDay() + 6) % 7; // 0 = Thứ 2
@@ -42,7 +49,7 @@ function periodRange(period: string): { from: string; to: string; label: string 
  */
 router.get('/finance', requireRole('Admin'), (req, res) => {
   const period = (req.query.period as string) || 'month';
-  const { from, to, label } = periodRange(period);
+  const { from, to, label } = periodRange(period, req.query.from as string, req.query.to as string);
 
   const revenue = get<{ s: number }>('SELECT COALESCE(SUM(so_tien),0) AS s FROM payments WHERE ngay >= ? AND ngay <= ?', [from, to])?.s || 0;
   const expense = get<{ s: number }>('SELECT COALESCE(SUM(so_tien),0) AS s FROM expenses WHERE ngay >= ? AND ngay <= ?', [from, to])?.s || 0;
@@ -68,7 +75,7 @@ router.get('/finance', requireRole('Admin'), (req, res) => {
  */
 router.get('/profit-by-shoot', requireRole('Admin'), (req, res) => {
   const period = (req.query.period as string) || 'month';
-  const { from, to, label } = periodRange(period);
+  const { from, to, label } = periodRange(period, req.query.from as string, req.query.to as string);
   // Tính theo tiền thực PHÁT SINH trong kỳ (thu/chi có ngày trong kỳ), không theo ngày chụp —
   // để buổi chụp tương lai đã nhận cọc trong kỳ vẫn được tính đúng doanh thu.
   const rows = all(
@@ -92,7 +99,7 @@ router.get('/profit-by-shoot', requireRole('Admin'), (req, res) => {
  */
 router.get('/cashbook', requireRole('Admin'), (req, res) => {
   const period = (req.query.period as string) || 'month';
-  const { from, to, label } = periodRange(period);
+  const { from, to, label } = periodRange(period, req.query.from as string, req.query.to as string);
   const income = all(
     `SELECT p.ngay AS ngay, p.so_tien AS so_tien, 'Thu' AS huong, p.loai AS loai,
             s.code AS shoot_code, c.full_name AS customer_name

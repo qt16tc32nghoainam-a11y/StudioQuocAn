@@ -172,6 +172,12 @@ tr.row-link:hover td { background: var(--panel-2); }
 .segment button:hover { color: var(--ink); }
 .segment button.active { background: var(--panel); color: var(--gold-dark); box-shadow: 0 1px 3px rgba(28,25,23,.12); }
 
+/* Khoảng ngày tùy chọn (từ – đến) */
+.daterange { display: inline-flex; align-items: center; gap: 8px; }
+.daterange input { padding: 7px 10px; border: 1px solid var(--line-strong); border-radius: 9px; font-size: 13.5px; background: #fff; color: var(--ink); font-family: inherit; }
+.daterange input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-soft); }
+.daterange__sep { color: var(--muted); font-size: 14px; }
+
 /* ---------- Khối tài chính: các số phân tách bằng divider (không hộp lồng hộp) ---------- */
 .fin-row { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 18px; }
 .fin-cell { padding: 4px 20px; border-left: 1px solid var(--line); }

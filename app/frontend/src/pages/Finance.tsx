@@ -1,9 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { Spinner, Empty, money, dateVN } from '../components/ui';
-
-type Period = 'week' | 'month' | 'year';
-const PERIODS: [Period, string][] = [['week', 'Tuần'], ['month', 'Tháng'], ['year', 'Năm']];
+import { Spinner, Empty, money, dateVN, PeriodFilter, periodQuery, type PeriodState } from '../components/ui';
 
 interface ProfitRow { id: string; code: string; shoot_type?: string; shoot_date?: string; customer_name?: string; paid: number; cost: number; profit: number; }
 interface ProfitData { label: string; rows: ProfitRow[]; totalRevenue: number; totalCost: number; totalProfit: number; }
@@ -12,14 +9,17 @@ interface CashData { label: string; ledger: LedgerRow[]; totalIn: number; totalO
 
 export default function Finance() {
   const [tab, setTab] = useState<'profit' | 'cash'>('profit');
-  const [period, setPeriod] = useState<Period>('month');
+  const [pf, setPf] = useState<PeriodState>({ period: 'month', from: '', to: '' });
   const [profit, setProfit] = useState<ProfitData | null>(null);
   const [cash, setCash] = useState<CashData | null>(null);
+  const needDates = pf.period === 'custom' && (!pf.from || !pf.to);
 
   useEffect(() => {
-    if (tab === 'profit') { setProfit(null); api.get<ProfitData>(`/dashboard/profit-by-shoot?period=${period}`).then(setProfit).catch(() => setProfit(null)); }
-    else { setCash(null); api.get<CashData>(`/dashboard/cashbook?period=${period}`).then(setCash).catch(() => setCash(null)); }
-  }, [tab, period]);
+    if (needDates) { setProfit(null); setCash(null); return; }
+    const q = periodQuery(pf);
+    if (tab === 'profit') { setProfit(null); api.get<ProfitData>(`/dashboard/profit-by-shoot?${q}`).then(setProfit).catch(() => setProfit(null)); }
+    else { setCash(null); api.get<CashData>(`/dashboard/cashbook?${q}`).then(setCash).catch(() => setCash(null)); }
+  }, [tab, pf]);
 
   return (
     <>
@@ -28,18 +28,16 @@ export default function Finance() {
           <button role="tab" aria-selected={tab === 'profit'} className={tab === 'profit' ? 'active' : ''} onClick={() => setTab('profit')}>Lợi nhuận theo buổi</button>
           <button role="tab" aria-selected={tab === 'cash'} className={tab === 'cash' ? 'active' : ''} onClick={() => setTab('cash')}>Sổ quỹ</button>
         </div>
-        <div className="segment" role="tablist" aria-label="Chọn kỳ">
-          {PERIODS.map(([k, l]) => (
-            <button key={k} role="tab" aria-selected={period === k} className={period === k ? 'active' : ''} onClick={() => setPeriod(k)}>{l}</button>
-          ))}
-        </div>
+        <PeriodFilter value={pf} onChange={setPf} />
       </div>
 
-      {(() => { const lbl = tab === 'profit' ? profit?.label : cash?.label; return lbl ? (
+      {needDates ? (
+        <p className="hint">Chọn <b>từ ngày</b> và <b>đến ngày</b> để xem báo cáo trong khoảng.</p>
+      ) : (() => { const lbl = tab === 'profit' ? profit?.label : cash?.label; return lbl ? (
         <div className="period-label"><span className="period-label__dot" />Đang xem: <b>{lbl}</b></div>
       ) : null; })()}
 
-      {tab === 'profit' ? (
+      {needDates ? null : tab === 'profit' ? (
         !profit ? <Spinner /> : (
           <>
             <div className="grid stat-grid" style={{ marginBottom: 16 }}>
