@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('Admin','Makeup','Photo')),
   status TEXT NOT NULL DEFAULT 'Hoạt động' CHECK (status IN ('Hoạt động','Tạm khóa')),
+  calendar_token TEXT,              -- token bí mật cho link lịch ICS (Google Calendar subscribe)
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

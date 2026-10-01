@@ -33,6 +33,7 @@ export default function Calendar() {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [staffFilter, setStaffFilter] = useState('');
   const [detail, setDetail] = useState<Ev | null>(null);
+  const [showGoogle, setShowGoogle] = useState(false);
 
   // Tính khoảng ngày cần tải theo view
   const range = useMemo(() => {
@@ -156,6 +157,7 @@ export default function Calendar() {
               {v === 'month' ? 'Tháng' : v === 'week' ? 'Tuần' : 'Ngày'}
             </button>
           ))}
+          <button className="btn btn--ghost btn--sm" onClick={() => setShowGoogle(true)}>📅 Kết nối Google Calendar</button>
         </div>
       </div>
 
@@ -193,8 +195,75 @@ export default function Calendar() {
               {isAdmin && detail.customer_phone && <tr><td style={{ color: 'var(--muted)', padding: '6px 0' }}>SĐT khách</td><td>{detail.customer_phone}</td></tr>}
             </tbody>
           </table>
+          <div style={{ marginTop: 14 }}>
+            <a className="btn btn--ghost btn--sm" href={googleEventUrl(detail)} target="_blank" rel="noopener">📅 Thêm vào Google Calendar</a>
+          </div>
         </Modal>
       )}
+
+      {showGoogle && <GoogleConnect onClose={() => setShowGoogle(false)} />}
     </>
+  );
+}
+
+/** Tạo link "Thêm nhanh 1 sự kiện" vào Google Calendar. */
+function googleEventUrl(e: Ev): string {
+  const d = (e.shoot_date || '').slice(0, 10).replace(/-/g, '');
+  let dates = '';
+  if (d && e.start_time) {
+    const st = e.start_time.replace(':', '') + '00';
+    const et = (e.end_time || e.start_time).replace(':', '') + '00';
+    dates = `${d}T${st}/${d}T${et}`;
+  } else if (d) {
+    const next = new Date(Date.parse((e.shoot_date || '').slice(0, 10)) + 86400000);
+    const nd = `${next.getFullYear()}${String(next.getMonth() + 1).padStart(2, '0')}${String(next.getDate()).padStart(2, '0')}`;
+    dates = `${d}/${nd}`;
+  }
+  const text = `${e.customer_name || ''}${e.shoot_type ? ' - ' + e.shoot_type : ''}`;
+  const details = [`Mã: ${e.code}`, e.photographer_name ? `Chụp: ${e.photographer_name}` : '', e.makeup_name ? `Makeup: ${e.makeup_name}` : ''].filter(Boolean).join('\n');
+  const p = new URLSearchParams({ action: 'TEMPLATE', text, dates, details, location: e.location || '' });
+  return `https://calendar.google.com/calendar/render?${p}`;
+}
+
+function GoogleConnect({ onClose }: { onClose: () => void }) {
+  const [url, setUrl] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => { api.get<{ url: string }>('/calendar/my-feed-url').then((r) => setUrl(absUrl(r.url))).catch(() => {}); }, []);
+  const absUrl = (u: string) => (u.startsWith('http') ? u : window.location.origin + u);
+
+  const reset = async () => {
+    if (!confirm('Đổi link sẽ làm link cũ ngừng hoạt động. Tiếp tục?')) return;
+    const r = await api.post<{ url: string }>('/calendar/reset-token');
+    setUrl(absUrl(r.url)); setCopied(false);
+  };
+  const copy = () => { navigator.clipboard?.writeText(url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800); }); };
+
+  return (
+    <Modal title="Kết nối Google Calendar" onClose={onClose} wide>
+      <div className="guide" style={{ marginBottom: 14 }}>
+        <span className="guide__ic">💡</span>
+        <span>Thêm link dưới đây vào Google Calendar 1 lần, lịch chụp của bạn sẽ tự hiện và tự cập nhật (Google làm mới vài giờ/lần).</span>
+      </div>
+
+      <label style={{ fontSize: 13.5, color: 'var(--muted)', fontWeight: 600 }}>Link lịch của bạn (giữ bí mật)</label>
+      <div style={{ display: 'flex', gap: 8, margin: '6px 0 14px' }}>
+        <input value={url} readOnly style={{ flex: 1, padding: '9px 11px', border: '1px solid var(--line)', borderRadius: 9, fontSize: 13 }} onFocus={(e) => e.currentTarget.select()} />
+        <button className="btn btn--sm" onClick={copy}>{copied ? '✓ Đã chép' : 'Chép link'}</button>
+      </div>
+
+      <b style={{ fontSize: 14 }}>Cách thêm vào Google Calendar (trên máy tính):</b>
+      <ol style={{ fontSize: 14, lineHeight: 1.7, paddingLeft: 20, marginTop: 6 }}>
+        <li>Mở <a href="https://calendar.google.com" target="_blank" rel="noopener">calendar.google.com</a></li>
+        <li>Bên trái, cạnh <b>"Lịch khác" (Other calendars)</b> → bấm dấu <b>+</b> → chọn <b>"Từ URL" (From URL)</b></li>
+        <li>Dán link ở trên vào → bấm <b>Thêm lịch (Add calendar)</b></li>
+        <li>Xong! Lịch chụp sẽ hiện trong Google Calendar (cả trên điện thoại nếu dùng cùng tài khoản).</li>
+      </ol>
+
+      <div style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+        <button className="btn btn--ghost btn--sm" onClick={reset}>Đổi link (nếu bị lộ)</button>
+        <p className="hint" style={{ marginTop: 6 }}>Lưu ý: link này riêng của bạn — Admin thấy tất cả lịch, nhân viên chỉ thấy lịch được gán. Đừng chia sẻ cho người ngoài.</p>
+      </div>
+    </Modal>
   );
 }

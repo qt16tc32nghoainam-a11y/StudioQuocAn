@@ -123,6 +123,7 @@ function migrateAddColumns(): void {
   addCol('deliveries', 'raw_sent_at', 'TEXT');
   addCol('deliveries', 'promised_date', 'TEXT');
   addCol('deliveries', 'promised_notified_date', 'TEXT');
+  addCol('users', 'calendar_token', 'TEXT');
 }
 
 /** Ghi DB ra file. */
