@@ -12,6 +12,7 @@ import Expenses from './pages/Expenses';
 import Calendar from './pages/Calendar';
 import EmailSettings from './pages/EmailSettings';
 import Packages from './pages/Packages';
+import Finance from './pages/Finance';
 import ChangePassword from './pages/ChangePassword';
 
 export default function App() {
@@ -29,6 +30,7 @@ export default function App() {
         <Route path="/lich" element={<Calendar />} />
         <Route path="/giao-hinh" element={<Deliveries />} />
         <Route path="/chi-phi" element={isAdmin ? <Expenses /> : <Navigate to="/" />} />
+        <Route path="/tai-chinh" element={isAdmin ? <Finance /> : <Navigate to="/" />} />
         <Route path="/goi-dich-vu" element={isAdmin ? <Packages /> : <Navigate to="/" />} />
         <Route path="/cau-hinh-email" element={isAdmin ? <EmailSettings /> : <Navigate to="/" />} />
         <Route path="/noi-dung" element={isAdmin ? <Content /> : <Navigate to="/" />} />

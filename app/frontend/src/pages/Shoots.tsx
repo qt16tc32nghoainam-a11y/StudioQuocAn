@@ -49,15 +49,24 @@ export default function Shoots() {
 
   const openNew = () => { setEdit({ status: 'Đã đặt lịch', total_amount: 0, deposit_amount: 0 }); setErr(''); };
 
-  const save = async () => {
+  const save = async (force = false) => {
     if (!edit?.customer_id) { setErr('Chọn khách hàng'); return; }
     setErr('');
+    const body = force ? { ...edit, force: true } : edit;
     try {
-      if (edit.id) await api.put(`/shoots/${edit.id}`, edit);
-      else await api.post('/shoots', edit);
+      if (edit.id) await api.put(`/shoots/${edit.id}`, body);
+      else await api.post('/shoots', body);
       setEdit(null);
       load();
-    } catch (e: any) { setErr(e.message); }
+    } catch (e: any) {
+      // Trùng lịch nhân sự (409): hỏi xác nhận rồi lưu lại với force.
+      if (e.status === 409 && e.data?.conflicts) {
+        const msg = 'Cảnh báo trùng lịch:\n\n- ' + e.data.conflicts.join('\n- ') + '\n\nVẫn muốn lưu buổi này?';
+        if (confirm(msg)) return save(true);
+        return;
+      }
+      setErr(e.message);
+    }
   };
 
   const remove = async (s: Shoot) => {
@@ -147,7 +156,7 @@ export default function Shoots() {
           wide
           footer={<>
             <button className="btn btn--ghost" onClick={() => setEdit(null)}>Hủy</button>
-            <button className="btn" onClick={save}>Lưu</button>
+            <button className="btn" onClick={() => save()}>Lưu</button>
           </>}
         >
           {err && <div className="msg msg--err">{err}</div>}

@@ -50,6 +50,64 @@ router.get('/finance', requireRole('Admin'), (req, res) => {
   });
 });
 
+/**
+ * GET /api/dashboard/profit-by-shoot?period=... — lợi nhuận theo TỪNG BUỔI (chỉ Admin).
+ * Lãi/buổi = tiền đã thu của buổi − chi phí gắn buổi. Lọc theo ngày chụp trong kỳ.
+ */
+router.get('/profit-by-shoot', requireRole('Admin'), (req, res) => {
+  const period = (req.query.period as string) || 'month';
+  const { from, label } = periodStart(period);
+  const today = new Date().toISOString().slice(0, 10);
+  // Tính theo tiền thực PHÁT SINH trong kỳ (thu/chi có ngày trong kỳ), không theo ngày chụp —
+  // để buổi chụp tương lai đã nhận cọc trong kỳ vẫn được tính đúng doanh thu.
+  const rows = all(
+    `SELECT s.id, s.code, s.shoot_type, s.shoot_date, s.total_amount, c.full_name AS customer_name,
+            COALESCE((SELECT SUM(so_tien) FROM payments p WHERE p.shoot_id = s.id AND p.ngay >= ? AND p.ngay <= ?), 0) AS paid,
+            COALESCE((SELECT SUM(so_tien) FROM expenses e WHERE e.shoot_id = s.id AND e.ngay >= ? AND e.ngay <= ?), 0) AS cost
+     FROM shoots s JOIN customers c ON c.id = s.customer_id
+     WHERE s.status != 'Đã hủy'
+       AND (EXISTS (SELECT 1 FROM payments p WHERE p.shoot_id = s.id AND p.ngay >= ? AND p.ngay <= ?)
+         OR EXISTS (SELECT 1 FROM expenses e WHERE e.shoot_id = s.id AND e.ngay >= ? AND e.ngay <= ?))
+     ORDER BY s.shoot_date DESC`,
+    [from, today, from, today, from, today, from, today]
+  ).map((r: any) => ({ ...r, profit: (Number(r.paid) || 0) - (Number(r.cost) || 0) }));
+  const totalRevenue = rows.reduce((a: number, r: any) => a + (Number(r.paid) || 0), 0);
+  const totalCost = rows.reduce((a: number, r: any) => a + (Number(r.cost) || 0), 0);
+  res.json({ period, from, to: today, label, rows, totalRevenue, totalCost, totalProfit: totalRevenue - totalCost });
+});
+
+/**
+ * GET /api/dashboard/cashbook?period=... — sổ quỹ (chỉ Admin): dòng thu/chi theo thời gian + số dư lũy kế.
+ */
+router.get('/cashbook', requireRole('Admin'), (req, res) => {
+  const period = (req.query.period as string) || 'month';
+  const { from, label } = periodStart(period);
+  const today = new Date().toISOString().slice(0, 10);
+  const income = all(
+    `SELECT p.ngay AS ngay, p.so_tien AS so_tien, 'Thu' AS huong, p.loai AS loai,
+            s.code AS shoot_code, c.full_name AS customer_name
+     FROM payments p JOIN shoots s ON s.id = p.shoot_id JOIN customers c ON c.id = s.customer_id
+     WHERE p.ngay >= ? AND p.ngay <= ?`, [from, today]
+  );
+  const outcome = all(
+    `SELECT e.ngay AS ngay, e.so_tien AS so_tien, 'Chi' AS huong, COALESCE(e.loai,'Khác') AS loai,
+            s.code AS shoot_code, c.full_name AS customer_name
+     FROM expenses e LEFT JOIN shoots s ON s.id = e.shoot_id LEFT JOIN customers c ON c.id = s.customer_id
+     WHERE e.ngay >= ? AND e.ngay <= ?`, [from, today]
+  );
+  // Gộp + sắp theo ngày tăng dần, tính số dư lũy kế.
+  const entries = [...income, ...outcome].sort((a: any, b: any) => (a.ngay < b.ngay ? -1 : a.ngay > b.ngay ? 1 : 0));
+  let balance = 0;
+  const ledger = entries.map((e: any) => {
+    const amt = Number(e.so_tien) || 0;
+    balance += e.huong === 'Thu' ? amt : -amt;
+    return { ...e, balance };
+  });
+  const totalIn = income.reduce((a: number, r: any) => a + (Number(r.so_tien) || 0), 0);
+  const totalOut = outcome.reduce((a: number, r: any) => a + (Number(r.so_tien) || 0), 0);
+  res.json({ period, from, to: today, label, ledger, totalIn, totalOut, balance: totalIn - totalOut });
+});
+
 /** GET /api/dashboard — số liệu tổng quan. Admin xem toàn bộ; Photo/Makeup chỉ buổi chụp của mình. */
 router.get('/', (req, res) => {
   const today = new Date().toISOString().slice(0, 10);

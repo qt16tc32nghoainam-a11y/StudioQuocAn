@@ -47,6 +47,45 @@ function userById(id: string | null): any | null {
   return get<any>('SELECT id, full_name, email, role FROM users WHERE id = ?', [id]) || null;
 }
 
+/** Hai khoảng giờ có giao nhau không (HH:mm). Thiếu giờ -> coi như cả ngày (giao). */
+function timeOverlap(aStart?: string, aEnd?: string, bStart?: string, bEnd?: string): boolean {
+  if (!aStart || !aEnd || !bStart || !bEnd) return true; // thiếu giờ: coi trùng ngày là đụng
+  return aStart < bEnd && bStart < aEnd;
+}
+
+/**
+ * Tìm buổi chụp khác trùng lịch nhân sự: cùng ngày, cùng người (photographer/makeup), chưa hủy, giao giờ.
+ * Trả danh sách cảnh báo (rỗng = không trùng). excludeId: bỏ qua chính buổi đang sửa.
+ */
+function findConflicts(
+  photographerId: string | null, makeupId: string | null,
+  shootDate: string | null, startTime: string | null, endTime: string | null,
+  excludeId?: string
+): string[] {
+  if (!shootDate) return [];
+  const warnings: string[] = [];
+  const checkOne = (uid: string | null, label: string) => {
+    if (!uid) return;
+    const rows = all<any>(
+      `SELECT s.code, s.start_time, s.end_time, c.full_name AS customer_name
+       FROM shoots s JOIN customers c ON c.id = s.customer_id
+       WHERE s.status != 'Đã hủy' AND s.shoot_date = ? AND s.id != ?
+         AND (s.photographer_id = ? OR s.makeup_id = ?)`,
+      [shootDate, excludeId || '', uid, uid]
+    );
+    for (const r of rows) {
+      if (timeOverlap(startTime || undefined, endTime || undefined, r.start_time, r.end_time)) {
+        const u = userById(uid);
+        const gio = r.start_time ? ` (${r.start_time}${r.end_time ? '–' + r.end_time : ''})` : '';
+        warnings.push(`${u?.full_name || label} đã có buổi ${r.code} — ${r.customer_name}${gio} cùng ngày`);
+      }
+    }
+  };
+  checkOne(photographerId, 'Người chụp');
+  if (makeupId && makeupId !== photographerId) checkOne(makeupId, 'Trang điểm');
+  return warnings;
+}
+
 /** Gom thông tin buổi chụp để đưa vào email. */
 function mailInfo(shootId: string): ShootMailInfo {
   const r = get<any>(
@@ -112,6 +151,12 @@ router.post('/', (req, res) => {
   const cp = checkAssignee(photographerId, 'Photo'); if (!cp.ok) return res.status(400).json({ error: cp.error });
   const cm = checkAssignee(makeupId, 'Makeup'); if (!cm.ok) return res.status(400).json({ error: cm.error });
 
+  // Cảnh báo trùng lịch nhân sự (chặn mềm: FE gửi lại force=true để vẫn lưu).
+  if (!b.force) {
+    const conflicts = findConflicts(photographerId, makeupId, nn(b.shoot_date), nn(b.start_time), nn(b.end_time));
+    if (conflicts.length) return res.status(409).json({ error: 'Trùng lịch nhân sự', conflicts });
+  }
+
   const now = new Date().toISOString();
   const id = uuid();
   const total = Number(b.total_amount) || 0;
@@ -171,6 +216,18 @@ router.put('/:id', (req, res) => {
   const newMakeup = b.makeup_id !== undefined ? nn(b.makeup_id) : s.makeup_id;
   const cp = checkAssignee(newPhotographer, 'Photo'); if (!cp.ok) return res.status(400).json({ error: cp.error });
   const cm = checkAssignee(newMakeup, 'Makeup'); if (!cm.ok) return res.status(400).json({ error: cm.error });
+
+  // Cảnh báo trùng lịch nhân sự khi sửa (bỏ qua chính buổi này). FE gửi force=true để vẫn lưu.
+  if (!b.force) {
+    const newDate = b.shoot_date !== undefined ? nn(b.shoot_date) : s.shoot_date;
+    const newStart = b.start_time !== undefined ? nn(b.start_time) : s.start_time;
+    const newEnd = b.end_time !== undefined ? nn(b.end_time) : s.end_time;
+    const newStatus = b.status ?? s.status;
+    if (newStatus !== 'Đã hủy') {
+      const conflicts = findConflicts(newPhotographer, newMakeup, newDate, newStart, newEnd, req.params.id);
+      if (conflicts.length) return res.status(409).json({ error: 'Trùng lịch nhân sự', conflicts });
+    }
+  }
 
   const before = { ...s };
   const now = new Date().toISOString();

@@ -11,9 +11,11 @@ export function setToken(t: string | null) {
 
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  data: any;
+  constructor(message: string, status: number, data?: any) {
     super(message);
     this.status = status;
+    this.data = data;
   }
 }
 
@@ -41,7 +43,7 @@ async function request<T>(method: string, url: string, body?: any, isForm = fals
       // để AuthProvider phát hiện và chuyển về đăng nhập
       window.dispatchEvent(new Event('wa-unauthorized'));
     }
-    throw new ApiError(msg, res.status);
+    throw new ApiError(msg, res.status, data);
   }
   return data as T;
 }
