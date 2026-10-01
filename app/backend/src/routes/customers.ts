@@ -37,16 +37,21 @@ router.get('/:id', (req, res) => {
   res.json({ ...customer, shoots });
 });
 
-/** POST /api/customers — tạo khách mới. */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** POST /api/customers — tạo khách mới. Email BẮT BUỘC (để gửi mail hợp đồng + giao hình). */
 router.post('/', (req, res) => {
   const { full_name, phone, email, address, source, note } = req.body || {};
   if (!full_name) return res.status(400).json({ error: 'Thiếu tên khách hàng' });
+  if (!email || !EMAIL_RE.test(String(email).trim())) {
+    return res.status(400).json({ error: 'Vui lòng nhập email khách hàng hợp lệ (dùng để gửi mail hợp đồng và giao ảnh)' });
+  }
   const now = new Date().toISOString();
   const id = uuid();
   run(
     `INSERT INTO customers (id, code, full_name, phone, email, address, source, note, created_by, created_at, updated_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-    [id, nextCode('customers', 'KH'), full_name, phone || null, email || null, address || null, source || null, note || null, req.user!.id, now, now]
+    [id, nextCode('customers', 'KH'), full_name, phone || null, String(email).trim(), address || null, source || null, note || null, req.user!.id, now, now]
   );
   persist();
   res.status(201).json({ id });
@@ -57,9 +62,13 @@ router.put('/:id', (req, res) => {
   const c = get<any>('SELECT * FROM customers WHERE id = ?', [req.params.id]);
   if (!c) return res.status(404).json({ error: 'Không tìm thấy khách hàng' });
   const { full_name, phone, email, address, source, note } = req.body || {};
+  // Email vẫn bắt buộc hợp lệ nếu được gửi lên (không cho xóa trống).
+  if (email !== undefined && (!email || !EMAIL_RE.test(String(email).trim()))) {
+    return res.status(400).json({ error: 'Email khách hàng không hợp lệ' });
+  }
   run(
     `UPDATE customers SET full_name = ?, phone = ?, email = ?, address = ?, source = ?, note = ?, updated_at = ? WHERE id = ?`,
-    [full_name ?? c.full_name, phone ?? c.phone, email ?? c.email, address ?? c.address, source ?? c.source, note ?? c.note, new Date().toISOString(), req.params.id]
+    [full_name ?? c.full_name, phone ?? c.phone, email !== undefined ? String(email).trim() : c.email, address ?? c.address, source ?? c.source, note ?? c.note, new Date().toISOString(), req.params.id]
   );
   persist();
   res.json({ ok: true });

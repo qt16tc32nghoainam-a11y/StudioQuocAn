@@ -34,6 +34,10 @@ export default function Deliveries() {
 
   const save = async () => {
     if (!edit) return;
+    // Nhắc dán link khi đánh dấu đã giao (không chặn, chỉ xác nhận) để mail cho khách có link.
+    if (edit.delivered && !(edit.delivery_link || '').trim()) {
+      if (!confirm('Chưa có Link ảnh. Email gửi khách sẽ không kèm link tải. Vẫn tiếp tục?')) return;
+    }
     setErr('');
     try {
       await api.put(`/deliveries/${edit.id}`, edit);
@@ -114,6 +118,12 @@ export default function Deliveries() {
             <input type="checkbox" id="dv" checked={!!edit.delivered} onChange={(e) => setEdit({ ...edit, delivered: e.target.checked ? 1 : 0 })} />
             <label htmlFor="dv" style={{ margin: 0 }}>Đã gửi ảnh cho khách</label>
           </div>
+          {!!edit.delivered && (
+            <div className="guide" style={{ marginTop: 4 }}>
+              <span className="guide__ic">✉️</span>
+              <span>Khi lưu, hệ thống sẽ <b>tự gửi email link ảnh cho khách</b>. Nhớ dán <b>Link ảnh</b> bên dưới trước khi lưu.</span>
+            </div>
+          )}
 
           <div className="field-row">
             <Field label="Số ảnh giao"><input type="number" value={edit.photo_count ?? ''} onChange={(e) => setEdit({ ...edit, photo_count: e.target.value ? Number(e.target.value) : undefined })} /></Field>

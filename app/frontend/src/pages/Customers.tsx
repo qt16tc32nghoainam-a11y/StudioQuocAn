@@ -26,6 +26,9 @@ export default function Customers() {
 
   const save = async () => {
     if (!edit?.full_name?.trim()) { setErr('Nhập tên khách hàng'); return; }
+    if (!edit?.email?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(edit.email.trim())) {
+      setErr('Nhập email khách hàng hợp lệ (bắt buộc để gửi mail hợp đồng và ảnh)'); return;
+    }
     setErr('');
     try {
       if (edit.id) await api.put(`/customers/${edit.id}`, edit);
@@ -94,7 +97,9 @@ export default function Customers() {
           </Field>
           <div className="field-row">
             <Field label="Số điện thoại"><input value={edit.phone || ''} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} /></Field>
-            <Field label="Email"><input value={edit.email || ''} onChange={(e) => setEdit({ ...edit, email: e.target.value })} /></Field>
+            <Field label="Email *" hint="Bắt buộc — dùng để gửi mail xác nhận hợp đồng và link ảnh khi giao.">
+              <input type="email" value={edit.email || ''} onChange={(e) => setEdit({ ...edit, email: e.target.value })} placeholder="email@domain.com" />
+            </Field>
           </div>
           <Field label="Địa chỉ"><input value={edit.address || ''} onChange={(e) => setEdit({ ...edit, address: e.target.value })} /></Field>
           <Field label="Nguồn khách">

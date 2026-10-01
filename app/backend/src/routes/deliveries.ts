@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import { all, get, run, persist } from '../db/database';
 import { authenticate } from '../middleware/auth';
+import { enqueuePhotosDelivered } from '../notifications';
+import { config } from '../config';
 
 const router = Router();
 router.use(authenticate);
@@ -76,6 +78,19 @@ router.put('/:id', (req, res) => {
   }
 
   persist();
+
+  // Vừa chuyển sang ĐÃ GIAO -> gửi email link ảnh cho khách.
+  const finalLink = b.delivery_link ?? d.delivery_link;
+  const finalMethod = b.delivery_method ?? d.delivery_method;
+  if (delivered && !d.delivered) {
+    const info = get<any>(
+      `SELECT s.code, s.shoot_type, s.shoot_date, c.full_name AS customer_name, c.email AS customer_email
+       FROM shoots s JOIN customers c ON c.id = s.customer_id WHERE s.id = ?`, [d.shoot_id]);
+    if (info?.customer_email) {
+      enqueuePhotosDelivered(info.customer_email, info.customer_name, info, finalLink || '', finalMethod || '', config.appName, d.shoot_id);
+    }
+  }
+
   res.json({ ok: true });
 });
 

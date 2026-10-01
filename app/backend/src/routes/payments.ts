@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import { all, get, run, persist } from '../db/database';
 import { authenticate, requireRole } from '../middleware/auth';
+import { enqueueContractConfirmed } from '../notifications';
+import { config } from '../config';
 
 const router = Router();
 // Tiền bạc: chỉ Admin xem/sửa. Makeup/Photo không thấy.
@@ -69,10 +71,22 @@ router.delete('/:id', (req, res) => {
 function syncDeposit(shootId: string) {
   const shoot = get<any>('SELECT total_amount FROM shoots WHERE id = ?', [shootId]);
   if (!shoot) return;
+  const wasPaidFull = shoot.paid_full ? 1 : 0;
   const paid = (get<{ s: number }>('SELECT COALESCE(SUM(so_tien),0) AS s FROM payments WHERE shoot_id = ?', [shootId])?.s) || 0;
   const total = Number(shoot.total_amount) || 0;
   const paidFull = total > 0 && paid >= total ? 1 : 0;
   run('UPDATE shoots SET deposit_amount = ?, paid_full = ?, updated_at = ? WHERE id = ?', [paid, paidFull, new Date().toISOString(), shootId]);
+
+  // Vừa chuyển sang ĐÃ THANH TOÁN ĐỦ -> gửi email xác nhận hợp đồng cho khách.
+  if (paidFull && !wasPaidFull) {
+    const info = get<any>(
+      `SELECT s.code, s.shoot_type, s.shoot_date, s.package_name, s.total_amount,
+              c.full_name AS customer_name, c.email AS customer_email
+       FROM shoots s JOIN customers c ON c.id = s.customer_id WHERE s.id = ?`, [shootId]);
+    if (info?.customer_email) {
+      enqueueContractConfirmed(info.customer_email, info.customer_name, info, config.appName, shootId);
+    }
+  }
 }
 
 export default router;

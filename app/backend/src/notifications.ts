@@ -72,12 +72,70 @@ export function enqueueShootMail(
   if (!recipient.email) return;
   const { subject, html } = buildHtml(kind, roleLabel, shoot);
   const eventKey = `${shoot.code || 'NA'}:${recipient.email}:${kind}:${dedupeSuffix}`;
+  insertOutbox(eventKey, recipient.email, recipient.name || '', subject, html);
+}
+
+// ===================== Email cho KHÁCH HÀNG =====================
+
+export interface CustomerMailShoot {
+  code?: string; customer_name?: string; shoot_type?: string; shoot_date?: string;
+  package_name?: string; total_amount?: number;
+}
+
+function money(n: any): string {
+  const v = Number(n) || 0;
+  return v.toLocaleString('vi-VN') + 'đ';
+}
+
+/** Email xác nhận khi khách đã thanh toán đủ / chốt hợp đồng. */
+export function enqueueContractConfirmed(email: string, customerName: string, s: CustomerMailShoot, studioName: string, dedupe: string): void {
+  if (!email) return;
+  const subject = `[${studioName}] Xác nhận hợp đồng chụp ${esc(s.code)}`;
+  const html = `
+  <div style="font-family:system-ui,Arial,sans-serif;max-width:560px;margin:0 auto;color:#2a221b">
+    <h2 style="color:#9a6f2c;margin:0 0 6px">${esc(studioName)}</h2>
+    <p>Chào ${esc(customerName)},</p>
+    <p>${esc(studioName)} xác nhận đã nhận đủ thanh toán cho hợp đồng chụp của bạn. Cảm ơn bạn đã tin tưởng ❤</p>
+    <table style="width:100%;border-collapse:collapse;font-size:15px">
+      <tr><td style="padding:6px 0;color:#8a7d70;width:140px">Mã hợp đồng</td><td style="padding:6px 0"><b>${esc(s.code)}</b></td></tr>
+      <tr><td style="padding:6px 0;color:#8a7d70">Gói chụp</td><td style="padding:6px 0">${esc(s.package_name) || esc(s.shoot_type) || '—'}</td></tr>
+      <tr><td style="padding:6px 0;color:#8a7d70">Ngày chụp</td><td style="padding:6px 0"><b>${dateVN(s.shoot_date)}</b></td></tr>
+      <tr><td style="padding:6px 0;color:#8a7d70">Tổng giá trị</td><td style="padding:6px 0">${money(s.total_amount)}</td></tr>
+    </table>
+    <p>Chúng tôi sẽ liên hệ bạn về lịch chụp chi tiết. Nếu cần hỗ trợ, vui lòng phản hồi hoặc liên hệ hotline của studio.</p>
+    <p style="color:#8a7d70;font-size:13px;margin-top:18px">Email tự động từ ${esc(studioName)}.</p>
+  </div>`;
+  insertOutbox(`${s.code}:${email}:contract:${dedupe}`, email, customerName, subject, html);
+}
+
+/** Email giao hình: gửi link ảnh cho khách khi đã hoàn thành. */
+export function enqueuePhotosDelivered(email: string, customerName: string, s: CustomerMailShoot, link: string, method: string, studioName: string, dedupe: string): void {
+  if (!email) return;
+  const subject = `[${studioName}] Ảnh của bạn đã sẵn sàng — ${esc(s.code)}`;
+  const linkBlock = link
+    ? `<p style="margin:18px 0"><a href="${esc(link)}" style="background:#b98a3e;color:#fff;text-decoration:none;padding:12px 22px;border-radius:9px;font-weight:600;display:inline-block">📷 Xem / Tải ảnh</a></p>
+       <p style="font-size:13px;color:#8a7d70;word-break:break-all">Hoặc mở link: <a href="${esc(link)}">${esc(link)}</a></p>`
+    : `<p>Vui lòng liên hệ studio để nhận ảnh${method ? ' qua ' + esc(method) : ''}.</p>`;
+  const html = `
+  <div style="font-family:system-ui,Arial,sans-serif;max-width:560px;margin:0 auto;color:#2a221b">
+    <h2 style="color:#9a6f2c;margin:0 0 6px">${esc(studioName)}</h2>
+    <p>Chào ${esc(customerName)},</p>
+    <p>Bộ ảnh của bạn (mã ${esc(s.code)}${s.shoot_type ? ' · ' + esc(s.shoot_type) : ''}) đã hoàn thành và sẵn sàng để xem/tải.</p>
+    ${linkBlock}
+    <p>Cảm ơn bạn đã đồng hành cùng ${esc(studioName)}. Chúc bạn thật nhiều niềm vui với những khoảnh khắc đẹp ❤</p>
+    <p style="color:#8a7d70;font-size:13px;margin-top:18px">Email tự động từ ${esc(studioName)}.</p>
+  </div>`;
+  insertOutbox(`${s.code}:${email}:photos:${dedupe}`, email, customerName, subject, html);
+}
+
+/** Chèn 1 bản ghi vào outbox (chống trùng bằng eventKey). */
+function insertOutbox(eventKey: string, recipient: string, recipientName: string, subject: string, html: string): void {
   const existing = get<{ id: string }>('SELECT id FROM email_outbox WHERE event_key = ?', [eventKey]);
-  if (existing) return; // đã có, không tạo trùng
+  if (existing) return;
   run(
     `INSERT INTO email_outbox (id, event_key, recipient, recipient_name, subject, html_body, status, attempts, next_attempt_at, created_at)
      VALUES (?,?,?,?,?,?, 'pending', 0, ?, ?)`,
-    [uuid(), eventKey, recipient.email, recipient.name || null, subject, html, new Date().toISOString(), new Date().toISOString()]
+    [uuid(), eventKey, recipient, recipientName || null, subject, html, new Date().toISOString(), new Date().toISOString()]
   );
   persist();
 }
