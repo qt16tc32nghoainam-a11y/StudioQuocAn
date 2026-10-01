@@ -14,7 +14,8 @@ router.get('/staff', (_req, res) => {
 router.get('/options', (_req, res) => {
   res.json({
     shootStatus: ['Đã đặt lịch', 'Đã chụp', 'Đang xử lý hình', 'Chờ giao', 'Hoàn tất', 'Đã hủy'],
-    shootTypes: ['Ngoại cảnh', 'Phim trường', 'Studio', 'Concept Beauty', 'Make-up cô dâu', 'Phóng sự cưới', 'Đám hỏi', 'Mâm quả cưới hỏi', 'Gia đình & Baby', 'Khác'],
+    shootTypes: ['Chụp ảnh cổng', 'Chụp tiệc đính hôn', 'Chụp tiệc cưới', 'Ngoại cảnh', 'Phim trường', 'Studio', 'Concept Beauty', 'Make-up cô dâu', 'Phóng sự cưới', 'Đám hỏi', 'Mâm quả cưới hỏi', 'Gia đình & Baby', 'Khác'],
+    bookingTypes: ['Chụp ảnh cổng', 'Chụp tiệc đính hôn', 'Chụp tiệc cưới'],
     sources: ['Facebook', 'Zalo', 'Instagram', 'Giới thiệu', 'Hotline', 'Website', 'Khác'],
     deliveryMethods: ['Google Drive', 'Link tải', 'USB', 'In ảnh', 'Zalo', 'Khác'],
     paymentTypes: ['Đặt cọc', 'Thanh toán thêm', 'Tất toán'],

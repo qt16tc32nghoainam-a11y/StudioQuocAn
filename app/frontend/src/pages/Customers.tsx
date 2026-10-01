@@ -8,32 +8,37 @@ interface Customer {
   address?: string; source?: string; note?: string;
 }
 
-const EMPTY: Partial<Customer> = { full_name: '', phone: '', email: '', address: '', source: '', note: '' };
+interface BookShoot { shoot_type: string; shoot_date?: string; start_time?: string }
+const EMPTY: Partial<Customer> & { shoots?: BookShoot[] } = { full_name: '', phone: '', email: '', address: '', source: '', note: '', shoots: [] };
 
 export default function Customers() {
   const { isAdmin } = useAuth();
   const [list, setList] = useState<Customer[] | null>(null);
   const [q, setQ] = useState('');
-  const [edit, setEdit] = useState<Partial<Customer> | null>(null);
+  const [edit, setEdit] = useState<(Partial<Customer> & { shoots?: BookShoot[] }) | null>(null);
   const [viewId, setViewId] = useState<string | null>(null);
   const [err, setErr] = useState('');
   const [sources, setSources] = useState<string[]>([]);
+  const [bookingTypes, setBookingTypes] = useState<string[]>([]);
 
   const load = () => {
     api.get<Customer[]>(`/customers${q ? `?q=${encodeURIComponent(q)}` : ''}`).then(setList).catch(() => setList([]));
   };
   useEffect(load, [q]);
-  useEffect(() => { api.get('/meta/options').then((o) => setSources(o.sources || [])).catch(() => {}); }, []);
+  useEffect(() => { api.get('/meta/options').then((o) => { setSources(o.sources || []); setBookingTypes(o.bookingTypes || []); }).catch(() => {}); }, []);
 
   const save = async () => {
     if (!edit?.full_name?.trim()) { setErr('Nhập tên khách hàng'); return; }
+    if (!edit?.phone?.trim()) { setErr('Nhập số điện thoại (bắt buộc)'); return; }
     if (!edit?.email?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(edit.email.trim())) {
       setErr('Nhập email khách hàng hợp lệ (bắt buộc để gửi mail hợp đồng và ảnh)'); return;
     }
+    const bookings = (edit.shoots || []).filter((s) => s.shoot_type);
+    if (bookings.some((s) => !s.shoot_date)) { setErr('Mỗi buổi chụp cần chọn ngày dự tính'); return; }
     setErr('');
     try {
       if (edit.id) await api.put(`/customers/${edit.id}`, edit);
-      else await api.post('/customers', edit);
+      else await api.post('/customers', { ...edit, shoots: bookings });
       setEdit(null);
       load();
     } catch (e: any) { setErr(e.message); }
@@ -98,8 +103,8 @@ export default function Customers() {
             <input value={edit.full_name || ''} onChange={(e) => setEdit({ ...edit, full_name: e.target.value })} placeholder="VD: Ngọc Quang & Kiều Phúc" />
           </Field>
           <div className="field-row">
-            <Field label="Số điện thoại"><input value={edit.phone || ''} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} /></Field>
-            <Field label="Email *" hint="Bắt buộc — dùng để gửi mail xác nhận hợp đồng và link ảnh khi giao.">
+            <Field label="Số điện thoại *" hint="Bắt buộc."><input value={edit.phone || ''} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} placeholder="09xx xxx xxx" /></Field>
+            <Field label="Gmail / Email *" hint="Bắt buộc — gửi mail hợp đồng và link ảnh.">
               <input type="email" value={edit.email || ''} onChange={(e) => setEdit({ ...edit, email: e.target.value })} placeholder="email@domain.com" />
             </Field>
           </div>
@@ -111,6 +116,37 @@ export default function Customers() {
             </select>
           </Field>
           <Field label="Ghi chú"><textarea value={edit.note || ''} onChange={(e) => setEdit({ ...edit, note: e.target.value })} /></Field>
+
+          {/* Buổi chụp khách book — chỉ khi tạo khách mới. Khách book nhiều loại thì thêm nhiều dòng. */}
+          {!edit.id && (
+            <div style={{ borderTop: '1px solid var(--line)', marginTop: 8, paddingTop: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <b style={{ fontSize: 14.5 }}>Buổi chụp khách đặt</b>
+                <button type="button" className="btn btn--ghost btn--sm" onClick={() => setEdit({ ...edit, shoots: [...(edit.shoots || []), { shoot_type: bookingTypes[0] || 'Chụp ảnh cổng', shoot_date: '' }] })}>+ Thêm buổi</button>
+              </div>
+              <p className="hint" style={{ margin: '2px 0 10px' }}>Khách book nhiều loại cùng lúc thì thêm nhiều dòng. Mỗi buổi sẽ tự lên Lịch làm việc + Google Calendar. (Gán người chụp / giá bổ sung sau trong mục Buổi chụp.)</p>
+              {(edit.shoots || []).length === 0 && <p className="muted" style={{ fontSize: 13 }}>Chưa thêm buổi nào. Có thể để trống và tạo buổi chụp sau.</p>}
+              {(edit.shoots || []).map((bk, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginBottom: 8, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 150 }}>
+                    <label style={{ fontSize: 12.5, color: 'var(--muted)', fontWeight: 600, display: 'block', marginBottom: 4 }}>Loại chụp</label>
+                    <select value={bk.shoot_type} onChange={(e) => { const n = [...edit.shoots!]; n[i] = { ...n[i], shoot_type: e.target.value }; setEdit({ ...edit, shoots: n }); }} style={{ width: '100%', padding: '9px 11px', border: '1px solid var(--line)', borderRadius: 9 }}>
+                      {bookingTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ width: 150 }}>
+                    <label style={{ fontSize: 12.5, color: 'var(--muted)', fontWeight: 600, display: 'block', marginBottom: 4 }}>Ngày dự tính</label>
+                    <input type="date" value={bk.shoot_date || ''} onChange={(e) => { const n = [...edit.shoots!]; n[i] = { ...n[i], shoot_date: e.target.value }; setEdit({ ...edit, shoots: n }); }} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 9 }} />
+                  </div>
+                  <div style={{ width: 110 }}>
+                    <label style={{ fontSize: 12.5, color: 'var(--muted)', fontWeight: 600, display: 'block', marginBottom: 4 }}>Giờ (nếu có)</label>
+                    <input type="time" value={bk.start_time || ''} onChange={(e) => { const n = [...edit.shoots!]; n[i] = { ...n[i], start_time: e.target.value }; setEdit({ ...edit, shoots: n }); }} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 9 }} />
+                  </div>
+                  <button type="button" className="btn btn--danger btn--sm" onClick={() => setEdit({ ...edit, shoots: edit.shoots!.filter((_, x) => x !== i) })}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
         </Modal>
       )}
 

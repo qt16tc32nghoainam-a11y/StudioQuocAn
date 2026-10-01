@@ -51,23 +51,52 @@ router.get('/:id', (req, res) => {
 });
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const SHOOT_STATUS = ['Đã đặt lịch', 'Đã chụp', 'Đang xử lý hình', 'Chờ giao', 'Hoàn tất', 'Đã hủy'];
 
-/** POST /api/customers — tạo khách mới. Email BẮT BUỘC (để gửi mail hợp đồng + giao hình). */
+/**
+ * POST /api/customers — tạo khách mới. SĐT + Email BẮT BUỘC.
+ * Có thể kèm mảng `shoots` (buổi chụp khách book cùng lúc): mỗi phần tử { shoot_type, shoot_date, start_time?, end_time? }.
+ * Mỗi buổi chụp tạo kèm 1 bản ghi giao hình.
+ */
 router.post('/', (req, res) => {
-  const { full_name, phone, email, address, source, note } = req.body || {};
-  if (!full_name) return res.status(400).json({ error: 'Thiếu tên khách hàng' });
+  const { full_name, phone, email, address, source, note, shoots } = req.body || {};
+  if (!full_name || !String(full_name).trim()) return res.status(400).json({ error: 'Thiếu tên khách hàng' });
+  if (!phone || !String(phone).trim()) return res.status(400).json({ error: 'Vui lòng nhập số điện thoại khách hàng' });
   if (!email || !EMAIL_RE.test(String(email).trim())) {
     return res.status(400).json({ error: 'Vui lòng nhập email khách hàng hợp lệ (dùng để gửi mail hợp đồng và giao ảnh)' });
   }
+  // Validate các buổi chụp (nếu có)
+  const list: any[] = Array.isArray(shoots) ? shoots : [];
+  for (const s of list) {
+    if (!s || !s.shoot_type) return res.status(400).json({ error: 'Mỗi buổi chụp phải chọn loại chụp' });
+    if (s.status && !SHOOT_STATUS.includes(s.status)) return res.status(400).json({ error: 'Trạng thái buổi chụp không hợp lệ' });
+  }
+
   const now = new Date().toISOString();
   const id = uuid();
   run(
     `INSERT INTO customers (id, code, full_name, phone, email, address, source, note, created_by, created_at, updated_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-    [id, nextCode('customers', 'KH'), full_name, phone || null, String(email).trim(), address || null, source || null, note || null, req.user!.id, now, now]
+    [id, nextCode('customers', 'KH'), String(full_name).trim(), String(phone).trim(), String(email).trim(), address || null, source || null, note || null, req.user!.id, now, now]
   );
+
+  const createdShoots: string[] = [];
+  for (const s of list) {
+    const sid = uuid();
+    run(
+      `INSERT INTO shoots (id, code, customer_id, title, shoot_type, shoot_date, start_time, end_time, status, created_by, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [sid, nextCode('shoots', 'BC'), id, null, s.shoot_type, s.shoot_date || null, s.start_time || null, s.end_time || null, 'Đã đặt lịch', req.user!.id, now, now]
+    );
+    run(
+      `INSERT INTO deliveries (id, shoot_id, editing_done, delivered, raw_sent, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?)`,
+      [uuid(), sid, 0, 0, 0, now, now]
+    );
+    createdShoots.push(sid);
+  }
   persist();
-  res.status(201).json({ id });
+  res.status(201).json({ id, shoots: createdShoots });
 });
 
 /** PUT /api/customers/:id — cập nhật khách. */
@@ -75,9 +104,12 @@ router.put('/:id', (req, res) => {
   const c = get<any>('SELECT * FROM customers WHERE id = ?', [req.params.id]);
   if (!c) return res.status(404).json({ error: 'Không tìm thấy khách hàng' });
   const { full_name, phone, email, address, source, note } = req.body || {};
-  // Email vẫn bắt buộc hợp lệ nếu được gửi lên (không cho xóa trống).
+  // Email + SĐT vẫn bắt buộc hợp lệ nếu được gửi lên (không cho xóa trống).
   if (email !== undefined && (!email || !EMAIL_RE.test(String(email).trim()))) {
     return res.status(400).json({ error: 'Email khách hàng không hợp lệ' });
+  }
+  if (phone !== undefined && !String(phone).trim()) {
+    return res.status(400).json({ error: 'Số điện thoại không được để trống' });
   }
   run(
     `UPDATE customers SET full_name = ?, phone = ?, email = ?, address = ?, source = ?, note = ?, updated_at = ? WHERE id = ?`,
