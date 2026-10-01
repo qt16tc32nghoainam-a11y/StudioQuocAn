@@ -34,6 +34,7 @@ export default function Calendar() {
   const [staffFilter, setStaffFilter] = useState('');
   const [detail, setDetail] = useState<Ev | null>(null);
   const [showGoogle, setShowGoogle] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   // Tính khoảng ngày cần tải theo view
   const range = useMemo(() => {
@@ -158,6 +159,7 @@ export default function Calendar() {
             </button>
           ))}
           {isAdmin && <button className="btn btn--ghost btn--sm" onClick={() => setShowGoogle(true)}>📅 Kết nối Google Calendar</button>}
+          {isAdmin && <button className="btn btn--ghost btn--sm" onClick={() => setShowImport(true)}>⬇️ Nhập lịch từ Google</button>}
         </div>
       </div>
 
@@ -202,7 +204,55 @@ export default function Calendar() {
       )}
 
       {showGoogle && <GoogleConnect onClose={() => setShowGoogle(false)} />}
+      {showImport && <ImportIcs onClose={() => setShowImport(false)} onDone={load} />}
     </>
+  );
+}
+
+function ImportIcs({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const doImport = async () => {
+    if (!file) { setMsg({ ok: false, text: 'Chọn file .ics đã export từ Google' }); return; }
+    setBusy(true); setMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const token = localStorage.getItem('wa-token');
+      const res = await fetch('/api/import/ics', { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Lỗi nhập');
+      setMsg({ ok: true, text: data.message });
+      onDone();
+    } catch (e: any) { setMsg({ ok: false, text: e.message }); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <Modal title="Nhập lịch từ Google Calendar" onClose={onClose} wide>
+      <div className="guide" style={{ marginBottom: 14 }}>
+        <span className="guide__ic">💡</span>
+        <span>Nhập 1 lần toàn bộ sự kiện cũ từ Google vào app. Sau đó quản lý trong app, không cần Google nữa.</span>
+      </div>
+      <b style={{ fontSize: 14 }}>Bước 1 — Export từ Google Calendar (trên máy tính):</b>
+      <ol style={{ fontSize: 14, lineHeight: 1.7, paddingLeft: 20, marginTop: 6 }}>
+        <li>Mở <a href="https://calendar.google.com/calendar/r/settings/export" target="_blank" rel="noopener">Google Calendar → Cài đặt → Nhập &amp; xuất</a></li>
+        <li>Bấm <b>Xuất (Export)</b> → tải về file <b>.zip</b></li>
+        <li>Giải nén file .zip → bên trong có (các) file <b>.ics</b></li>
+      </ol>
+      <b style={{ fontSize: 14 }}>Bước 2 — Tải file .ics lên đây:</b>
+      <div style={{ margin: '8px 0 12px' }}>
+        <input type="file" accept=".ics,text/calendar" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+      </div>
+      {msg && <div className={`msg ${msg.ok ? 'msg--ok' : 'msg--err'}`}>{msg.text}</div>}
+      <p className="hint">Các sự kiện sẽ vào khách tạm <b>"Nhập từ Google Calendar"</b>. Mở mục Khách hàng để xem và tách sang khách thật. Nhập lại cùng file sẽ không bị trùng.</p>
+      <div style={{ marginTop: 14, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+        <button className="btn btn--ghost" onClick={onClose}>Đóng</button>
+        <button className="btn" onClick={doImport} disabled={busy || !file}>{busy ? 'Đang nhập…' : 'Nhập vào app'}</button>
+      </div>
+    </Modal>
   );
 }
 
