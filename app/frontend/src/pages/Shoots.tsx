@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { Modal, Field, Spinner, Empty, StatusBadge, money, dateVN } from '../components/ui';
 import { useAuth } from '../lib/auth';
@@ -16,13 +17,15 @@ interface Customer { id: string; full_name: string; code: string; }
 
 export default function Shoots() {
   const { isAdmin } = useAuth();
+  const [sp] = useSearchParams();
   const [list, setList] = useState<Shoot[] | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [opts, setOpts] = useState<{ shootStatus: string[]; shootTypes: string[] }>({ shootStatus: [], shootTypes: [] });
-  const [statusFilter, setStatusFilter] = useState('');
-  const [monthFilter, setMonthFilter] = useState('all');
-  const [q, setQ] = useState('');
+  // Lọc ban đầu nhận từ URL (bấm từ Dashboard sang: ?status=..., ?month=YYYY-MM).
+  const [statusFilter, setStatusFilter] = useState(sp.get('status') || '');
+  const [monthFilter, setMonthFilter] = useState(sp.get('month') || 'all');
+  const [q, setQ] = useState(sp.get('q') || '');
   const [edit, setEdit] = useState<Partial<Shoot> | null>(null);
   const [pay, setPay] = useState<Shoot | null>(null);
   const [err, setErr] = useState('');
@@ -34,6 +37,12 @@ export default function Shoots() {
     api.get<Shoot[]>(`/shoots?${params}`).then(setList).catch(() => setList([]));
   };
   useEffect(load, [statusFilter, q]);
+  // URL đổi (bấm link từ Dashboard) -> áp lại bộ lọc.
+  useEffect(() => {
+    setStatusFilter(sp.get('status') || '');
+    setMonthFilter(sp.get('month') || 'all');
+    setQ(sp.get('q') || '');
+  }, [sp]);
   useEffect(() => {
     api.get<Customer[]>('/customers').then(setCustomers).catch(() => {});
     api.get<Staff[]>('/meta/staff').then(setStaff).catch(() => {});

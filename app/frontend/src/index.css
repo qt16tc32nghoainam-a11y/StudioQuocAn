@@ -79,6 +79,13 @@ button { font-family: inherit; cursor: pointer; }
 .stat .n { font-size: 30px; font-weight: 700; color: var(--gold-dark); }
 .stat .l { color: var(--muted); font-size: 13.5px; }
 .stat.alert .n { color: var(--red); }
+/* Thẻ số bấm được: cả thẻ là 1 liên kết tới danh sách đã lọc sẵn. */
+a.stat--link { text-decoration: none; color: inherit; transition: transform .08s ease, box-shadow .15s ease, border-color .15s ease; }
+a.stat--link:hover { transform: translateY(-2px); border-color: var(--gold); box-shadow: 0 6px 18px rgba(154,111,44,.15); }
+a.stat--link .l { color: var(--gold-dark); }
+/* Dòng bảng bấm được (buổi sắp tới / quá hạn trên Dashboard). */
+tr.row-link { transition: background .12s ease; }
+tr.row-link:hover td { background: #faf5ec; }
 
 /* ---------- Buttons ---------- */
 .btn {

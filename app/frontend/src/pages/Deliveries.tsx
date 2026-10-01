@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { Modal, Field, Spinner, Empty, dateVN } from '../components/ui';
 
@@ -12,9 +13,16 @@ interface Delivery {
 }
 interface Staff { id: string; full_name: string; }
 
+const VALID_FILTERS = ['all', 'editing', 'pending', 'overdue'];
+
 export default function Deliveries() {
+  const [sp, setSp] = useSearchParams();
   const [list, setList] = useState<Delivery[] | null>(null);
-  const [filter, setFilter] = useState('all');
+  // Nhận bộ lọc từ URL (khi bấm từ Dashboard sang), mặc định 'all'.
+  const urlFilter = sp.get('filter') || 'all';
+  const [filter, setFilterState] = useState(VALID_FILTERS.includes(urlFilter) ? urlFilter : 'all');
+  // Đổi tab -> cập nhật cả state và URL để link chia sẻ được / F5 giữ nguyên.
+  const setFilter = (f: string) => { setFilterState(f); setSp(f === 'all' ? {} : { filter: f }, { replace: true }); };
   const [staff, setStaff] = useState<Staff[]>([]);
   const [methods, setMethods] = useState<string[]>([]);
   const [edit, setEdit] = useState<Delivery | null>(null);
@@ -28,6 +36,8 @@ export default function Deliveries() {
     api.get<Delivery[]>(`/deliveries?${params}`).then(setList).catch(() => setList([]));
   };
   useEffect(load, [filter]);
+  // URL đổi (bấm link từ nơi khác) -> đồng bộ lại tab.
+  useEffect(() => { if (VALID_FILTERS.includes(urlFilter) && urlFilter !== filter) setFilterState(urlFilter); }, [urlFilter]);
   useEffect(() => {
     api.get<Staff[]>('/meta/staff').then(setStaff).catch(() => {});
     api.get('/meta/options').then((o) => setMethods(o.deliveryMethods || [])).catch(() => {});

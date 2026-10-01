@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { Modal, Field, Spinner, Empty, StatusBadge, money, dateVN } from '../components/ui';
 import { useAuth } from '../lib/auth';
@@ -172,6 +173,8 @@ function guessName(s: ShootRow): string {
 }
 
 function CustomerDetail({ id, onClose }: { id: string; onClose: () => void }) {
+  const { isAdmin } = useAuth();
+  const nav = useNavigate();
   const [data, setData] = useState<any>(undefined);
   const [reassign, setReassign] = useState<ShootRow | null>(null);
   const [newName, setNewName] = useState('');
@@ -242,7 +245,8 @@ function CustomerDetail({ id, onClose }: { id: string; onClose: () => void }) {
                       <span className={`badge ${s.raw_sent ? 'badge--green' : 'badge--gray'}`}>Ảnh gốc: {s.raw_sent ? 'đã gửi' : 'chưa'}</span>
                       <span className={`badge ${s.editing_done ? 'badge--green' : 'badge--amber'}`}>Làm hình: {s.editing_done ? 'xong' : 'chưa'}</span>
                       <span className={`badge ${s.delivered ? 'badge--green' : 'badge--amber'}`}>Giao ảnh: {s.delivered ? 'đã giao' : 'chưa'}</span>
-                      <button className="btn btn--ghost btn--sm" style={{ marginLeft: 'auto' }} onClick={() => openReassign(s)}>↗ Tách sang khách</button>
+                      <button className="btn btn--ghost btn--sm" style={{ marginLeft: 'auto' }} onClick={() => { onClose(); nav(`/buoi-chup?q=${encodeURIComponent(s.code)}`); }}>Mở buổi ↗</button>
+                      {isAdmin && <button className="btn btn--ghost btn--sm" onClick={() => openReassign(s)}>↗ Tách sang khách</button>}
                     </div>
                   </div>
                 );

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { Spinner, StatusBadge, dateVN, money } from '../components/ui';
 import { useAuth } from '../lib/auth';
@@ -28,7 +28,7 @@ function FinancePanel() {
         <>
           <div className="grid stat-grid" style={{ marginTop: 14 }}>
             <div className="card stat"><span className="n" style={{ color: 'var(--green)' }}>{money(f.revenue)}</span><span className="l">Doanh thu (đã thu)</span></div>
-            <div className="card stat"><span className="n" style={{ color: 'var(--red)' }}>{money(f.expense)}</span><span className="l">Chi phí</span></div>
+            <Link to="/chi-phi" className="card stat stat--link"><span className="n" style={{ color: 'var(--red)' }}>{money(f.expense)}</span><span className="l">Chi phí →</span></Link>
             <div className="card stat"><span className="n" style={{ color: f.profit >= 0 ? 'var(--gold-dark)' : 'var(--red)' }}>{money(f.profit)}</span><span className="l">Lợi nhuận</span></div>
             <div className="card stat"><span className="n" style={{ color: 'var(--amber)' }}>{money(f.receivable)}</span><span className="l">Công nợ (khách còn nợ)</span></div>
           </div>
@@ -62,6 +62,7 @@ interface Dash {
 
 export default function Dashboard() {
   const { isAdmin } = useAuth();
+  const nav = useNavigate();
   const [d, setD] = useState<Dash | null>(null);
 
   useEffect(() => {
@@ -74,11 +75,13 @@ export default function Dashboard() {
     <>
       {isAdmin && <FinancePanel />}
       <div className="grid stat-grid" style={{ marginBottom: 20 }}>
-        <div className="card stat"><span className="n">{d.totalCustomers}</span><span className="l">Khách hàng</span></div>
-        <div className="card stat"><span className="n">{d.totalShoots}</span><span className="l">Buổi chụp</span></div>
-        <div className="card stat"><span className="n">{d.pendingEditing}</span><span className="l">Chưa làm hình</span></div>
-        <div className="card stat"><span className="n">{d.pendingDelivery}</span><span className="l">Chưa giao ảnh</span></div>
-        <div className={`card stat${d.overdueCount ? ' alert' : ''}`}><span className="n">{d.overdueCount}</span><span className="l">Quá hạn giao</span></div>
+        {isAdmin && (
+          <Link to="/khach-hang" className="card stat stat--link"><span className="n">{d.totalCustomers}</span><span className="l">Khách hàng →</span></Link>
+        )}
+        <Link to="/buoi-chup" className="card stat stat--link"><span className="n">{d.totalShoots}</span><span className="l">Buổi chụp →</span></Link>
+        <Link to="/giao-hinh?filter=editing" className="card stat stat--link"><span className="n">{d.pendingEditing}</span><span className="l">Chưa làm hình →</span></Link>
+        <Link to="/giao-hinh?filter=pending" className="card stat stat--link"><span className="n">{d.pendingDelivery}</span><span className="l">Chưa giao ảnh →</span></Link>
+        <Link to="/giao-hinh?filter=overdue" className={`card stat stat--link${d.overdueCount ? ' alert' : ''}`}><span className="n">{d.overdueCount}</span><span className="l">Quá hạn giao →</span></Link>
       </div>
 
       <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'start' }}>
@@ -92,7 +95,7 @@ export default function Dashboard() {
                 <thead><tr><th>Ngày</th><th>Khách</th><th>Loại</th></tr></thead>
                 <tbody>
                   {d.upcomingShoots.map((s) => (
-                    <tr key={s.id}>
+                    <tr key={s.id} className="row-link" onClick={() => nav(`/buoi-chup?q=${encodeURIComponent(s.customer_name || s.code || '')}`)} style={{ cursor: 'pointer' }}>
                       <td>{dateVN(s.shoot_date)}</td>
                       <td>{s.customer_name}</td>
                       <td className="muted">{s.shoot_type || '—'}</td>
@@ -115,7 +118,7 @@ export default function Dashboard() {
                 <thead><tr><th>Hạn</th><th>Mã</th><th>Khách</th></tr></thead>
                 <tbody>
                   {d.overdue.map((o) => (
-                    <tr key={o.id}>
+                    <tr key={o.id} className="row-link" onClick={() => nav('/giao-hinh?filter=overdue')} style={{ cursor: 'pointer' }}>
                       <td style={{ color: 'var(--red)' }}>{dateVN(o.due_date)}</td>
                       <td>{o.shoot_code}</td>
                       <td>{o.customer_name}</td>
@@ -134,9 +137,10 @@ export default function Dashboard() {
         <div className="btn-row">
           {d.statusBreakdown.length === 0 ? <span className="muted">Chưa có dữ liệu.</span> :
             d.statusBreakdown.map((s) => (
-              <span key={s.status} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Link key={s.status} to={`/buoi-chup?status=${encodeURIComponent(s.status)}`}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none' }} title={`Xem buổi "${s.status}"`}>
                 <StatusBadge status={s.status} /> <b>{s.n}</b>
-              </span>
+              </Link>
             ))}
         </div>
       </div>
