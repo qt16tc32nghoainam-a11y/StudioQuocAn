@@ -16,12 +16,18 @@ import dashboardRoutes from './routes/dashboard';
 import metaRoutes from './routes/meta';
 import paymentRoutes from './routes/payments';
 import expenseRoutes from './routes/expenses';
+import settingsRoutes from './routes/settings';
+import calendarRoutes from './routes/calendar';
+import { startOutboxWorker } from './notifications';
 
 async function main() {
   await initDb();
 
   // Chuẩn bị bản sao repo website (clone nếu đã cấu hình). Không chặn khởi động nếu lỗi mạng.
   ensureRepo().catch((e) => console.warn('[website] Chưa sẵn sàng repo website:', e.message));
+
+  // Worker gửi email nền (hàng đợi outbox) — SMTP lỗi không ảnh hưởng thao tác lưu lịch.
+  startOutboxWorker();
 
   const app = express();
   app.use(cors({ origin: config.corsOrigin === '*' ? true : config.corsOrigin.split(',') }));
@@ -46,6 +52,8 @@ async function main() {
   app.use('/api/meta', metaRoutes);
   app.use('/api/payments', paymentRoutes);
   app.use('/api/expenses', expenseRoutes);
+  app.use('/api/settings', settingsRoutes);
+  app.use('/api/calendar', calendarRoutes);
 
   // Phục vụ frontend đã build (production).
   const staticDir = path.join(__dirname, '../public');

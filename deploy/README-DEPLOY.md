@@ -70,7 +70,15 @@ nano /opt/wedding-admin/app/backend/.env
 
 Bắt buộc sửa:
 - `JWT_SECRET` → chuỗi ngẫu nhiên (tạo bằng `openssl rand -hex 32`)
+- `APP_ENCRYPTION_KEY` → chuỗi ngẫu nhiên khác (mã hóa mật khẩu SMTP; đừng đổi sau khi đã lưu SMTP)
 - `GITHUB_TOKEN` → token đã tạo ở bước 0
+
+### Email tự động (SMTP) — cấu hình trong app
+
+Sau khi đăng nhập Admin, vào menu **Cấu hình email**:
+- Gmail: host `smtp.gmail.com`, cổng `587`, bỏ chọn SSL, dùng **Mật khẩu ứng dụng** (App Password, tạo trong Google Account → Security → 2-Step Verification → App passwords), KHÔNG dùng mật khẩu đăng nhập Gmail.
+- Bấm **Kiểm tra kết nối** rồi **Gửi thử** để chắc chắn.
+- Khi gán nhân viên Photo/Makeup vào buổi chụp (hoặc đổi ngày/giờ/địa điểm), hệ thống tự gửi email cho họ. Email đi qua hàng đợi, nếu SMTP lỗi sẽ tự thử lại, không ảnh hưởng việc lưu lịch.
 
 Xong thì:
 ```bash

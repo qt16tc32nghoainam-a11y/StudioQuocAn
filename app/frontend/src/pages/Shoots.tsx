@@ -9,6 +9,7 @@ interface Shoot {
   title?: string; package_name?: string; shoot_type?: string; location?: string; shoot_date?: string;
   photographer_id?: string; makeup_id?: string; total_amount?: number; deposit_amount?: number;
   paid_full?: number; status?: string; note?: string; due_date?: string;
+  start_time?: string; end_time?: string;
 }
 interface Staff { id: string; full_name: string; role: string; }
 interface Customer { id: string; full_name: string; code: string; }
@@ -58,6 +59,8 @@ export default function Shoots() {
   };
 
   const staffName = (id?: string) => staff.find((s) => s.id === id)?.full_name;
+  const photographers = staff.filter((s) => s.role === 'Photo');
+  const makeupArtists = staff.filter((s) => s.role === 'Makeup');
 
   return (
     <>
@@ -83,7 +86,7 @@ export default function Shoots() {
                 <tr key={s.id}>
                   <td className="muted">{s.code}</td>
                   <td><b>{s.customer_name}</b><div className="muted" style={{ fontSize: 12.5 }}>{s.title || ''}</div></td>
-                  <td>{dateVN(s.shoot_date)}</td>
+                  <td>{dateVN(s.shoot_date)}{s.start_time ? <div className="muted" style={{ fontSize: 12 }}>{s.start_time}{s.end_time ? '–' + s.end_time : ''}</div> : null}</td>
                   <td className="muted">{s.shoot_type || '—'}</td>
                   <td className="muted">{staffName(s.photographer_id) || '—'}</td>
                   <td>
@@ -147,16 +150,20 @@ export default function Shoots() {
             <Field label="Địa điểm"><input value={edit.location || ''} onChange={(e) => setEdit({ ...edit, location: e.target.value })} /></Field>
           </div>
           <div className="field-row">
-            <Field label="Người chụp">
+            <Field label="Giờ bắt đầu" hint="Để trống = cả ngày"><input type="time" value={edit.start_time || ''} onChange={(e) => setEdit({ ...edit, start_time: e.target.value })} /></Field>
+            <Field label="Giờ kết thúc"><input type="time" value={edit.end_time || ''} onChange={(e) => setEdit({ ...edit, end_time: e.target.value })} /></Field>
+          </div>
+          <div className="field-row">
+            <Field label="Người chụp (Photo)">
               <select value={edit.photographer_id || ''} onChange={(e) => setEdit({ ...edit, photographer_id: e.target.value })}>
                 <option value="">— Chọn —</option>
-                {staff.map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+                {photographers.map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
               </select>
             </Field>
-            <Field label="Trang điểm">
+            <Field label="Trang điểm (Makeup)">
               <select value={edit.makeup_id || ''} onChange={(e) => setEdit({ ...edit, makeup_id: e.target.value })}>
                 <option value="">— Chọn —</option>
-                {staff.map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+                {makeupArtists.map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
               </select>
             </Field>
           </div>

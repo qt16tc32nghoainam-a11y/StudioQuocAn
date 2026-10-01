@@ -65,6 +65,8 @@ CREATE TABLE IF NOT EXISTS shoots (
   shoot_type TEXT,                  -- loại: Ngoại cảnh / Phim trường / Studio / Đám hỏi / Phóng sự...
   location TEXT,                    -- địa điểm chụp
   shoot_date TEXT,                  -- NGÀY CHỤP
+  start_time TEXT,                  -- giờ bắt đầu HH:mm (NULL = cả ngày/chưa rõ)
+  end_time TEXT,                    -- giờ kết thúc HH:mm
   photographer_id TEXT,             -- người chụp (user)
   makeup_id TEXT,                   -- người trang điểm (user)
   total_amount REAL DEFAULT 0,      -- tổng tiền
@@ -132,9 +134,36 @@ CREATE TABLE IF NOT EXISTS expenses (
   FOREIGN KEY (created_by) REFERENCES users(id)
 );
 
+-- Cấu hình hệ thống dạng key-value (SMTP...). Secret được mã hóa trước khi lưu.
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT,
+  updated_at TEXT,
+  updated_by TEXT,
+  FOREIGN KEY (updated_by) REFERENCES users(id)
+);
+
+-- Hàng đợi email: lưu trước, worker gửi sau để SMTP lỗi không làm mất thao tác lưu lịch.
+CREATE TABLE IF NOT EXISTS email_outbox (
+  id TEXT PRIMARY KEY,
+  event_key TEXT NOT NULL UNIQUE,    -- khóa chống gửi trùng
+  recipient TEXT NOT NULL,
+  recipient_name TEXT,
+  subject TEXT NOT NULL,
+  html_body TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','sending','sent','failed')),
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  next_attempt_at TEXT,
+  sent_at TEXT,
+  created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_shoots_customer ON shoots(customer_id);
 CREATE INDEX IF NOT EXISTS idx_shoots_date ON shoots(shoot_date);
 CREATE INDEX IF NOT EXISTS idx_shoots_status ON shoots(status);
+CREATE INDEX IF NOT EXISTS idx_shoots_photographer ON shoots(photographer_id, shoot_date);
+CREATE INDEX IF NOT EXISTS idx_shoots_makeup ON shoots(makeup_id, shoot_date);
 CREATE INDEX IF NOT EXISTS idx_deliveries_shoot ON deliveries(shoot_id);
 CREATE INDEX IF NOT EXISTS idx_deliveries_due ON deliveries(due_date);
 CREATE INDEX IF NOT EXISTS idx_publish_created ON publish_log(created_at);
@@ -142,4 +171,5 @@ CREATE INDEX IF NOT EXISTS idx_payments_shoot ON payments(shoot_id);
 CREATE INDEX IF NOT EXISTS idx_payments_ngay ON payments(ngay);
 CREATE INDEX IF NOT EXISTS idx_expenses_ngay ON expenses(ngay);
 CREATE INDEX IF NOT EXISTS idx_expenses_shoot ON expenses(shoot_id);
+CREATE INDEX IF NOT EXISTS idx_email_outbox_status ON email_outbox(status, next_attempt_at);
 `;

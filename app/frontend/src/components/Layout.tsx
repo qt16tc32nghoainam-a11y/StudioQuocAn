@@ -5,21 +5,25 @@ import { useAuth } from '../lib/auth';
 const NAV = [
   { to: '/', label: 'Tổng quan', ic: '📊', exact: true },
   { to: '/khach-hang', label: 'Khách hàng', ic: '👤' },
+  { to: '/lich', label: 'Lịch làm việc', ic: '🗓️' },
   { to: '/buoi-chup', label: 'Buổi chụp', ic: '📅' },
   { to: '/giao-hinh', label: 'Giao hình', ic: '🖼️' },
   { to: '/chi-phi', label: 'Chi phí', ic: '💸', adminOnly: true },
   { to: '/noi-dung', label: 'Nội dung website', ic: '🌐', adminOnly: true },
   { to: '/nguoi-dung', label: 'Người dùng', ic: '🔑', adminOnly: true },
+  { to: '/cau-hinh-email', label: 'Cấu hình email', ic: '✉️', adminOnly: true },
 ];
 
 const TITLES: Record<string, string> = {
   '/': 'Tổng quan',
   '/khach-hang': 'Khách hàng',
+  '/lich': 'Lịch làm việc',
   '/buoi-chup': 'Buổi chụp',
   '/giao-hinh': 'Theo dõi giao hình',
   '/chi-phi': 'Chi phí',
   '/noi-dung': 'Nội dung website',
   '/nguoi-dung': 'Quản lý người dùng',
+  '/cau-hinh-email': 'Cấu hình email',
   '/doi-mat-khau': 'Đổi mật khẩu',
 };
 

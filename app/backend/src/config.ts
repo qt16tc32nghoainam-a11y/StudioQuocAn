@@ -29,6 +29,10 @@ export const config = {
   dbPath: process.env.DB_PATH || path.join(DATA_DIR, 'wedding-admin.db'),
   corsOrigin: process.env.CORS_ORIGIN || '*',
   dataDir: DATA_DIR,
+  // Khóa mã hóa secret (mật khẩu SMTP) lưu trong DB. Nên đặt APP_ENCRYPTION_KEY riêng ở .env;
+  // mặc định suy ra từ JWT secret để vẫn chạy được, nhưng production nên đặt khóa riêng.
+  encryptionKey: process.env.APP_ENCRYPTION_KEY || process.env.JWT_SECRET || 'wedding-admin-dev-secret-change-in-production',
+  appName: process.env.APP_NAME || 'Quốc An Studio',
   // Thư mục lưu ảnh upload (trước khi Công bố sẽ được sao chép vào repo website)
   uploadsDir: process.env.UPLOADS_DIR || path.join(DATA_DIR, 'uploads'),
   // Cấu hình đồng bộ repo website tĩnh

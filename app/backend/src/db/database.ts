@@ -42,6 +42,7 @@ export async function initDb(): Promise<void> {
   db.run('PRAGMA foreign_keys = ON;');
   db.run(SCHEMA_SQL); // idempotent: CREATE TABLE IF NOT EXISTS
   migrateRoles();     // DB cũ (Admin/NhanVien) -> nới CHECK sang Admin/Makeup/Photo
+  migrateAddColumns();// DB cũ: thêm cột còn thiếu (start_time, end_time...)
   dirty = true;
   persist();
 
@@ -95,6 +96,28 @@ function migrateRoles(): void {
     try { db.run('ROLLBACK'); } catch { /* ignore */ }
     console.error('[migration] Lỗi migrateRoles:', e);
   }
+}
+
+/**
+ * Thêm cột còn thiếu cho DB đã tồn tại (an toàn, không mất dữ liệu).
+ * CREATE TABLE IF NOT EXISTS không cập nhật bảng cũ nên phải ALTER thủ công.
+ */
+function migrateAddColumns(): void {
+  if (!db) return;
+  const addCol = (table: string, column: string, type: string) => {
+    try {
+      const r = db!.exec(`PRAGMA table_info(${table})`);
+      const cols = r.length ? r[0].values.map((v) => String(v[1])) : [];
+      if (cols.length && !cols.includes(column)) {
+        db!.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+        console.log(`[migration] Đã thêm cột ${table}.${column}`);
+      }
+    } catch (e) {
+      console.error(`[migration] Lỗi thêm cột ${table}.${column}:`, e);
+    }
+  };
+  addCol('shoots', 'start_time', 'TEXT');
+  addCol('shoots', 'end_time', 'TEXT');
 }
 
 /** Ghi DB ra file. */
@@ -167,4 +190,32 @@ export function nextCode(table: string, prefix: string): string {
 
 export function getDb(): SqlJsDatabase {
   return ensure();
+}
+
+/** Đọc 1 giá trị cấu hình (app_settings). */
+export function getSetting(key: string): string | undefined {
+  try {
+    const row = get<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', [key]);
+    return row?.value ?? undefined;
+  } catch { return undefined; }
+}
+
+/** Đọc toàn bộ cấu hình theo tiền tố key (vd 'smtp.'), trả object không kèm tiền tố. */
+export function getSettingsByPrefix(prefix: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  try {
+    const rows = all<{ key: string; value: string }>('SELECT key, value FROM app_settings WHERE key LIKE ?', [prefix + '%']);
+    for (const r of rows) out[r.key.slice(prefix.length)] = r.value ?? '';
+  } catch { /* bảng chưa có */ }
+  return out;
+}
+
+/** Ghi (upsert) 1 giá trị cấu hình rồi persist. */
+export function setSetting(key: string, value: string, updatedBy?: string): void {
+  run(
+    `INSERT INTO app_settings (key, value, updated_at, updated_by) VALUES (?,?,?,?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+    [key, value, new Date().toISOString(), updatedBy || null]
+  );
+  persist();
 }
