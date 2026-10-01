@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { Modal, Field, Spinner, Empty, StatusBadge, money, dateVN } from '../components/ui';
 import { useAuth } from '../lib/auth';
-import PaymentsModal from '../components/PaymentsModal';
 
 interface Shoot {
   id: string; code: string; customer_id: string; customer_name?: string; customer_phone?: string;
@@ -27,7 +26,6 @@ export default function Shoots() {
   const [monthFilter, setMonthFilter] = useState(sp.get('month') || 'all');
   const [q, setQ] = useState(sp.get('q') || '');
   const [edit, setEdit] = useState<Partial<Shoot> | null>(null);
-  const [pay, setPay] = useState<Shoot | null>(null);
   const [err, setErr] = useState('');
 
   const load = () => {
@@ -112,7 +110,7 @@ export default function Shoots() {
               </div>
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>Mã</th><th>Khách</th><th>Ngày chụp</th><th>Loại</th><th>Người chụp</th><th>Tiền</th><th>Trạng thái</th><th></th></tr></thead>
+                  <thead><tr><th>Mã</th><th>Khách</th><th>Ngày chụp</th><th>Loại</th><th>Người chụp</th><th>Trang điểm</th><th>Địa điểm</th><th>Trạng thái</th><th></th></tr></thead>
                   <tbody>
                     {g.items.map((s) => (
                       <tr key={s.id}>
@@ -121,16 +119,12 @@ export default function Shoots() {
                         <td>{dateVN(s.shoot_date)}{s.start_time ? <div className="muted" style={{ fontSize: 12 }}>{s.start_time}{s.end_time ? '–' + s.end_time : ''}</div> : null}</td>
                         <td className="muted">{s.shoot_type || '—'}</td>
                         <td className="muted">{staffName(s.photographer_id) || '—'}</td>
-                        <td>
-                          {money(s.total_amount)}
-                          {!s.paid_full && (s.deposit_amount ?? 0) > 0 && <div className="muted" style={{ fontSize: 12 }}>Cọc {money(s.deposit_amount)}</div>}
-                          {s.paid_full ? <div style={{ fontSize: 12, color: 'var(--green)' }}>Đã đủ</div> : null}
-                        </td>
+                        <td className="muted">{staffName(s.makeup_id) || '—'}</td>
+                        <td className="muted">{s.location || '—'}</td>
                         <td><StatusBadge status={s.status || ''} /></td>
                         <td>
                           <div className="btn-row">
                             {isAdmin ? <>
-                              <button className="btn btn--ghost btn--sm" onClick={() => setPay(s)}>Thu tiền</button>
                               <button className="btn btn--ghost btn--sm" onClick={() => { setEdit(s); setErr(''); }}>Sửa</button>
                               <button className="btn btn--danger btn--sm" onClick={() => remove(s)}>Xóa</button>
                             </> : <span className="muted" style={{ fontSize: 13 }}>Xem</span>}
@@ -157,6 +151,9 @@ export default function Shoots() {
           </>}
         >
           {err && <div className="msg msg--err">{err}</div>}
+          <div className="hint" style={{ background: '#f6efe3', border: '1px solid var(--line)', borderRadius: 9, padding: '8px 12px', marginBottom: 12 }}>
+            📅 Màn hình này chỉ xếp <b>lịch chụp</b> và <b>phân công</b> Photo/Makeup. Gói dịch vụ và tiền do Sale nhập ở mục <b>Khách hàng</b>.
+          </div>
           <div className="field-row">
             <Field label="Khách hàng *">
               <select value={edit.customer_id || ''} onChange={(e) => setEdit({ ...edit, customer_id: e.target.value })} disabled={!!edit.id}>
@@ -170,15 +167,14 @@ export default function Shoots() {
               </select>
             </Field>
           </div>
-          <Field label="Tiêu đề buổi chụp"><input value={edit.title || ''} onChange={(e) => setEdit({ ...edit, title: e.target.value })} placeholder="VD: Chụp ngoại cảnh gói VIP" /></Field>
           <div className="field-row">
-            <Field label="Gói dịch vụ"><input value={edit.package_name || ''} onChange={(e) => setEdit({ ...edit, package_name: e.target.value })} /></Field>
             <Field label="Loại chụp">
               <select value={edit.shoot_type || ''} onChange={(e) => setEdit({ ...edit, shoot_type: e.target.value })}>
                 <option value="">— Chọn —</option>
                 {opts.shootTypes.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </Field>
+            <Field label="Ghi chú lịch (tùy chọn)" hint="VD: Lễ dạm ngõ, chụp buổi sáng…"><input value={edit.title || ''} onChange={(e) => setEdit({ ...edit, title: e.target.value })} placeholder="Mô tả ngắn cho ekip" /></Field>
           </div>
           <div className="field-row">
             <Field label="Ngày chụp"><input type="date" value={edit.shoot_date?.slice(0, 10) || ''} onChange={(e) => setEdit({ ...edit, shoot_date: e.target.value })} /></Field>
@@ -220,15 +216,6 @@ export default function Shoots() {
           )}
           <Field label="Ghi chú"><textarea value={edit.note || ''} onChange={(e) => setEdit({ ...edit, note: e.target.value })} /></Field>
         </Modal>
-      )}
-
-      {pay && (
-        <PaymentsModal
-          shootId={pay.id}
-          shootLabel={`${pay.customer_name || ''} (${pay.code})`}
-          onClose={() => setPay(null)}
-          onChanged={load}
-        />
       )}
     </>
   );
