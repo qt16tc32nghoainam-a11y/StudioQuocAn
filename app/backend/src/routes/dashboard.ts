@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { get, all } from '../db/database';
 import { authenticate, requireRole } from '../middleware/auth';
-import { shootScope } from '../utils/scope';
+import { shootScope, isSale } from '../utils/scope';
 
 const router = Router();
 router.use(authenticate);
@@ -53,12 +53,13 @@ router.get('/finance', requireRole('Admin'), (req, res) => {
 /** GET /api/dashboard — số liệu tổng quan. Admin xem toàn bộ; Photo/Makeup chỉ buổi chụp của mình. */
 router.get('/', (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
-  const scope = shootScope(req.user!, 's');
+  // Sale (Admin/Makeup) xem tổng quan toàn studio; Photo chỉ buổi mình chụp.
+  const sale = isSale(req.user!.role);
+  const scope = sale ? { clause: '', params: [] as any[] } : shootScope(req.user!, 's');
   const myClause = scope.clause ? ` AND ${scope.clause}` : '';
   const myParams = scope.params;
-  const isAdmin = req.user!.role === 'Admin';
 
-  const totalCustomers = isAdmin ? (get<{ n: number }>('SELECT COUNT(*) AS n FROM customers')?.n || 0) : 0;
+  const totalCustomers = sale ? (get<{ n: number }>('SELECT COUNT(*) AS n FROM customers')?.n || 0) : 0;
   const totalShoots = get<{ n: number }>(
     `SELECT COUNT(*) AS n FROM shoots s WHERE 1=1${myClause}`, myParams
   )?.n || 0;

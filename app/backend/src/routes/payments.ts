@@ -1,13 +1,17 @@
 import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import { all, get, run, persist } from '../db/database';
-import { authenticate, requireRole } from '../middleware/auth';
+import { authenticate } from '../middleware/auth';
+import { isSale } from '../utils/scope';
 import { enqueueDepositReceived, enqueuePaymentCompleted } from '../notifications';
 import { config } from '../config';
 
 const router = Router();
-// Tiền bạc: chỉ Admin xem/sửa. Makeup/Photo không thấy.
-router.use(authenticate, requireRole('Admin'));
+// Tiền bạc: Sale (Admin/Makeup = người tư vấn) xem/thu. Photo không thấy.
+router.use(authenticate, (req, res, next) => {
+  if (!isSale(req.user!.role)) return res.status(403).json({ error: 'Chỉ Admin hoặc nhân viên tư vấn (Makeup) được xem/thu tiền' });
+  next();
+});
 
 const LOAI = ['Đặt cọc', 'Thanh toán thêm', 'Tất toán'];
 

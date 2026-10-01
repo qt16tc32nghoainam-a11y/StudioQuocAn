@@ -15,7 +15,7 @@ interface Staff { id: string; full_name: string; role: string; }
 interface Customer { id: string; full_name: string; code: string; }
 
 export default function Shoots() {
-  const { isAdmin } = useAuth();
+  const { isSale } = useAuth();
   const [sp] = useSearchParams();
   const [list, setList] = useState<Shoot[] | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -85,7 +85,7 @@ export default function Shoots() {
     <>
       <div className="page-head">
         <h1>Buổi chụp</h1>
-        {isAdmin && <button className="btn" onClick={openNew}>+ Thêm buổi chụp</button>}
+        {isSale && <button className="btn" onClick={openNew}>+ Thêm buổi chụp</button>}
       </div>
 
       <div className="toolbar">
@@ -124,7 +124,7 @@ export default function Shoots() {
                         <td><StatusBadge status={s.status || ''} /></td>
                         <td>
                           <div className="btn-row">
-                            {isAdmin ? <>
+                            {isSale ? <>
                               <button className="btn btn--ghost btn--sm" onClick={() => { setEdit(s); setErr(''); }}>Sửa</button>
                               <button className="btn btn--danger btn--sm" onClick={() => remove(s)}>Xóa</button>
                             </> : <span className="muted" style={{ fontSize: 13 }}>Xem</span>}
@@ -199,7 +199,7 @@ export default function Shoots() {
             </Field>
           </div>
           {/* Tiền & gói do Sale quản lý ở mục Khách hàng. Ở đây chỉ hiện để tham khảo, không nhập. */}
-          {edit.id && isAdmin && (
+          {edit.id && isSale && (
             <div className="field-row">
               <Field label="Tổng tiền (đ)" hint="Sửa tiền/cọc trong mục Khách hàng.">
                 <input type="text" value={money(edit.total_amount)} disabled />

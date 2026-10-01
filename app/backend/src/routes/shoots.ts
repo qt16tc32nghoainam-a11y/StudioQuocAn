@@ -2,25 +2,25 @@ import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import { all, get, run, persist, nextCode } from '../db/database';
 import { authenticate } from '../middleware/auth';
-import { shootScope } from '../utils/scope';
+import { shootScope, isSale } from '../utils/scope';
 import { enqueueShootMail, enqueueBookingConfirmed, enqueueBookingCancelled, ShootMailInfo } from '../notifications';
 import { config } from '../config';
 
 const router = Router();
 router.use(authenticate);
-// Makeup/Photo chỉ được xem (GET); thêm/sửa/xóa buổi chụp chỉ Admin.
+// Photo chỉ được xem (GET); Sale (Admin/Makeup) được thêm/sửa/xóa buổi chụp.
 router.use((req, res, next) => {
-  if (req.method !== 'GET' && req.user!.role !== 'Admin') {
-    return res.status(403).json({ error: 'Chỉ Admin được thêm/sửa/xóa buổi chụp' });
+  if (req.method !== 'GET' && !isSale(req.user!.role)) {
+    return res.status(403).json({ error: 'Chỉ Admin hoặc nhân viên tư vấn (Makeup) được thêm/sửa/xóa buổi chụp' });
   }
   next();
 });
 
 const SHOOT_STATUS = ['Đã đặt lịch', 'Đã chụp', 'Đang xử lý hình', 'Chờ giao', 'Hoàn tất', 'Đã hủy'];
 
-/** Ẩn các trường tiền với non-Admin (chỉ Admin thấy tổng tiền/cọc/đã thu). */
+/** Ẩn các trường tiền với Photo (chỉ Sale = Admin/Makeup thấy tổng tiền/cọc/đã thu). */
 function stripMoney(user: { role: string }, row: any): any {
-  if (!row || user.role === 'Admin') return row;
+  if (!row || isSale(user.role)) return row;
   const { total_amount, deposit_amount, paid_full, ...rest } = row;
   return rest;
 }
@@ -72,7 +72,8 @@ router.get('/', (req, res) => {
   if (from) { where.push('s.shoot_date >= ?'); params.push(from); }
   if (to) { where.push('s.shoot_date <= ?'); params.push(to); }
   if (q) { where.push('(c.full_name LIKE ? OR s.code LIKE ? OR s.title LIKE ?)'); const l = `%${q}%`; params.push(l, l, l); }
-  const scope = shootScope(req.user!, 's');
+  // Sale (Admin/Makeup) xem mọi buổi; Photo chỉ buổi mình chụp.
+  const scope = isSale(req.user!.role) ? { clause: '', params: [] as any[] } : shootScope(req.user!, 's');
   if (scope.clause) { where.push(scope.clause); params.push(...scope.params); }
   const sql = `
     SELECT s.*, c.full_name AS customer_name, c.phone AS customer_phone,
@@ -89,8 +90,10 @@ router.get('/', (req, res) => {
 router.get('/:id', (req, res) => {
   const shoot = get<any>('SELECT * FROM shoots WHERE id = ?', [req.params.id]);
   if (!shoot) return res.status(404).json({ error: 'Không tìm thấy buổi chụp' });
-  if (req.user!.role === 'Photo' && shoot.photographer_id !== req.user!.id) return res.status(403).json({ error: 'Không có quyền xem buổi chụp này' });
-  if (req.user!.role === 'Makeup' && shoot.makeup_id !== req.user!.id) return res.status(403).json({ error: 'Không có quyền xem buổi chụp này' });
+  // Photo chỉ xem buổi mình chụp; Sale (Admin/Makeup) xem mọi buổi.
+  if (!isSale(req.user!.role) && req.user!.role === 'Photo' && shoot.photographer_id !== req.user!.id) {
+    return res.status(403).json({ error: 'Không có quyền xem buổi chụp này' });
+  }
   const customer = get('SELECT * FROM customers WHERE id = ?', [shoot.customer_id]);
   const delivery = get('SELECT * FROM deliveries WHERE shoot_id = ?', [req.params.id]);
   res.json({ ...stripMoney(req.user!, shoot), customer, delivery });

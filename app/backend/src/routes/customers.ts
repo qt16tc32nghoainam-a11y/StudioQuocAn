@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import { all, get, run, persist, nextCode } from '../db/database';
 import { authenticate } from '../middleware/auth';
-import { shootScope } from '../utils/scope';
+import { shootScope, isSale } from '../utils/scope';
 import { enqueueBookingConfirmed } from '../notifications';
 import { config } from '../config';
 import { AuthUser } from '../types';
@@ -10,9 +10,13 @@ import { AuthUser } from '../types';
 const router = Router();
 router.use(authenticate);
 
-/** Nhân viên chỉ thấy khách có ít nhất 1 buổi chụp mình phụ trách. */
+/**
+ * Quyền xem 1 khách:
+ *  - Sale (Admin/Makeup): xem mọi khách.
+ *  - Photo: chỉ khách có buổi chụp mình phụ trách.
+ */
 function canAccessCustomer(user: AuthUser, customerId: string): boolean {
-  if (user.role === 'Admin') return true;
+  if (isSale(user.role)) return true;
   const scope = shootScope(user, 's');
   if (!scope.clause) return true;
   const row = get<{ n: number }>(
@@ -21,10 +25,10 @@ function canAccessCustomer(user: AuthUser, customerId: string): boolean {
   );
   return !!row && row.n > 0;
 }
-// Makeup/Photo chỉ được xem (GET); mọi thao tác ghi chỉ Admin.
+// Sale (Admin/Makeup) được thêm/sửa/xóa khách. Photo chỉ được xem.
 router.use((req, res, next) => {
-  if (req.method !== 'GET' && req.user!.role !== 'Admin') {
-    return res.status(403).json({ error: 'Chỉ Admin được thêm/sửa/xóa khách hàng' });
+  if (req.method !== 'GET' && !isSale(req.user!.role)) {
+    return res.status(403).json({ error: 'Chỉ Admin hoặc nhân viên tư vấn (Makeup) được thêm/sửa/xóa khách hàng' });
   }
   next();
 });
@@ -39,8 +43,8 @@ router.get('/', (req, res) => {
     where.push('(c.full_name LIKE ? OR c.phone LIKE ? OR c.code LIKE ?)');
     params.push(like, like, like);
   }
-  // Phân quyền: non-Admin chỉ lấy khách có buổi chụp mình phụ trách.
-  const scope = shootScope(req.user!, 's');
+  // Phân quyền: Photo chỉ lấy khách có buổi chụp mình phụ trách; Sale (Admin/Makeup) xem hết.
+  const scope = isSale(req.user!.role) ? { clause: '', params: [] as any[] } : shootScope(req.user!, 's');
   if (scope.clause) {
     where.push(`c.id IN (SELECT s.customer_id FROM shoots s WHERE ${scope.clause})`);
     params.push(...scope.params);
@@ -54,8 +58,9 @@ router.get('/:id', (req, res) => {
   const customer = get('SELECT * FROM customers WHERE id = ?', [req.params.id]);
   if (!customer) return res.status(404).json({ error: 'Không tìm thấy khách hàng' });
   if (!canAccessCustomer(req.user!, req.params.id)) return res.status(403).json({ error: 'Không có quyền xem khách hàng này' });
-  const isAdmin = req.user!.role === 'Admin';
-  const scope = shootScope(req.user!, 's');
+  // Sale (Admin/Makeup) thấy mọi buổi + tiền; Photo chỉ thấy buổi mình, ẩn tiền.
+  const sale = isSale(req.user!.role);
+  const scope = sale ? { clause: '', params: [] as any[] } : shootScope(req.user!, 's');
   const scopeClause = scope.clause ? ` AND ${scope.clause}` : '';
   const shoots = all(
     `SELECT s.*,
@@ -71,7 +76,7 @@ router.get('/:id', (req, res) => {
      ORDER BY s.shoot_date DESC, s.created_at DESC`,
     [req.params.id, ...scope.params]
   ).map((s: any) => {
-    if (isAdmin) return s;
+    if (sale) return s;
     const { total_amount, deposit_amount, paid_full, paid_amount, ...rest } = s;
     return rest;
   });

@@ -17,6 +17,8 @@ interface AuthCtx {
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
   isAdmin: boolean;
+  /** Sale = người tư vấn: Admin hoặc Makeup. Được quản khách + thu tiền. */
+  isSale: boolean;
 }
 
 const Ctx = createContext<AuthCtx>(null as any);
@@ -51,7 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <Ctx.Provider value={{ user, loading, login, logout, isAdmin: user?.role === 'Admin' }}>
+    <Ctx.Provider value={{ user, loading, login, logout, isAdmin: user?.role === 'Admin', isSale: user?.role === 'Admin' || user?.role === 'Makeup' }}>
       {children}
     </Ctx.Provider>
   );

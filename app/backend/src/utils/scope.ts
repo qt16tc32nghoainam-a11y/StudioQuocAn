@@ -1,6 +1,14 @@
 import { AuthUser } from '../types';
 
 /**
+ * Vai trò "Sale" (người tư vấn/chốt khách) = Admin hoặc Makeup.
+ * Sale được quản lý toàn bộ khách hàng + thu tiền. Photo chỉ xem buổi mình chụp.
+ */
+export function isSale(role: string): boolean {
+  return role === 'Admin' || role === 'Makeup';
+}
+
+/**
  * Sinh điều kiện SQL giới hạn buổi chụp theo quyền:
  *  - Admin: xem tất cả.
  *  - Photo: chỉ buổi chụp mình là người chụp.

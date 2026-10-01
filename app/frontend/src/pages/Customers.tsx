@@ -14,7 +14,7 @@ interface BookShoot { shoot_type: string; shoot_date?: string; start_time?: stri
 const EMPTY: Partial<Customer> & { shoots?: BookShoot[] } = { full_name: '', phone: '', email: '', address: '', source: '', note: '', shoots: [] };
 
 export default function Customers() {
-  const { isAdmin } = useAuth();
+  const { isSale } = useAuth();
   const [list, setList] = useState<Customer[] | null>(null);
   const [q, setQ] = useState('');
   const [edit, setEdit] = useState<(Partial<Customer> & { shoots?: BookShoot[] }) | null>(null);
@@ -60,7 +60,7 @@ export default function Customers() {
     <>
       <div className="page-head">
         <h1>Khách hàng</h1>
-        {isAdmin && <button className="btn" onClick={() => { setEdit({ ...EMPTY }); setErr(''); }}>+ Thêm khách</button>}
+        {isSale && <button className="btn" onClick={() => { setEdit({ ...EMPTY }); setErr(''); }}>+ Thêm khách</button>}
       </div>
 
       <div className="toolbar">
@@ -82,7 +82,7 @@ export default function Customers() {
                   <td>
                     <div className="btn-row">
                       <button className="btn btn--ghost btn--sm" onClick={() => setViewId(c.id)}>Xem</button>
-                      {isAdmin && <>
+                      {isSale && <>
                         <button className="btn btn--ghost btn--sm" onClick={() => { setEdit(c); setErr(''); }}>Sửa</button>
                         <button className="btn btn--danger btn--sm" onClick={() => remove(c)}>Xóa</button>
                       </>}
@@ -204,7 +204,7 @@ function guessName(s: ShootRow): string {
 }
 
 function CustomerDetail({ id, onClose }: { id: string; onClose: () => void }) {
-  const { isAdmin } = useAuth();
+  const { isSale } = useAuth();
   const nav = useNavigate();
   const [data, setData] = useState<any>(undefined);
   const [pay, setPay] = useState<ShootRow | null>(null);
@@ -277,9 +277,9 @@ function CustomerDetail({ id, onClose }: { id: string; onClose: () => void }) {
                       <span className={`badge ${s.raw_sent ? 'badge--green' : 'badge--gray'}`}>Ảnh gốc: {s.raw_sent ? 'đã gửi' : 'chưa'}</span>
                       <span className={`badge ${s.editing_done ? 'badge--green' : 'badge--amber'}`}>Làm hình: {s.editing_done ? 'xong' : 'chưa'}</span>
                       <span className={`badge ${s.delivered ? 'badge--green' : 'badge--amber'}`}>Giao ảnh: {s.delivered ? 'đã giao' : 'chưa'}</span>
-                      {isAdmin && <button className="btn btn--sm" style={{ marginLeft: 'auto' }} onClick={() => setPay(s)}>💰 Thu tiền</button>}
-                      <button className="btn btn--ghost btn--sm" style={isAdmin ? {} : { marginLeft: 'auto' }} onClick={() => { onClose(); nav(`/buoi-chup?q=${encodeURIComponent(s.code)}`); }}>Mở buổi ↗</button>
-                      {isAdmin && <button className="btn btn--ghost btn--sm" onClick={() => openReassign(s)}>↗ Tách khách</button>}
+                      {isSale && <button className="btn btn--sm" style={{ marginLeft: 'auto' }} onClick={() => setPay(s)}>💰 Thu tiền</button>}
+                      <button className="btn btn--ghost btn--sm" style={isSale ? {} : { marginLeft: 'auto' }} onClick={() => { onClose(); nav(`/buoi-chup?q=${encodeURIComponent(s.code)}`); }}>Mở buổi ↗</button>
+                      {isSale && <button className="btn btn--ghost btn--sm" onClick={() => openReassign(s)}>↗ Tách khách</button>}
                     </div>
                   </div>
                 );
