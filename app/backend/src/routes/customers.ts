@@ -3,6 +3,8 @@ import { v4 as uuid } from 'uuid';
 import { all, get, run, persist, nextCode } from '../db/database';
 import { authenticate } from '../middleware/auth';
 import { shootScope } from '../utils/scope';
+import { enqueueBookingConfirmed } from '../notifications';
+import { config } from '../config';
 import { AuthUser } from '../types';
 
 const router = Router();
@@ -107,12 +109,14 @@ router.post('/', (req, res) => {
   );
 
   const createdShoots: string[] = [];
+  const mailShoots: { code: string; shoot_type?: string; shoot_date?: string }[] = [];
   for (const s of list) {
     const sid = uuid();
+    const code = nextCode('shoots', 'BC');
     run(
       `INSERT INTO shoots (id, code, customer_id, title, shoot_type, shoot_date, start_time, end_time, status, created_by, created_at, updated_at)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [sid, nextCode('shoots', 'BC'), id, null, s.shoot_type, s.shoot_date || null, s.start_time || null, s.end_time || null, 'Đã đặt lịch', req.user!.id, now, now]
+      [sid, code, id, null, s.shoot_type, s.shoot_date || null, s.start_time || null, s.end_time || null, s.status || 'Đã đặt lịch', req.user!.id, now, now]
     );
     run(
       `INSERT INTO deliveries (id, shoot_id, editing_done, delivered, raw_sent, created_at, updated_at)
@@ -120,8 +124,17 @@ router.post('/', (req, res) => {
       [uuid(), sid, 0, 0, 0, now, now]
     );
     createdShoots.push(sid);
+    // Chỉ xác nhận các buổi chưa hủy.
+    if ((s.status || 'Đã đặt lịch') !== 'Đã hủy') {
+      mailShoots.push({ code, shoot_type: s.shoot_type, shoot_date: s.shoot_date || undefined, customer_name: String(full_name).trim() } as any);
+    }
   }
   persist();
+
+  // Email xác nhận chốt lịch gửi khách (gộp tất cả buổi vừa book trong 1 mail).
+  if (mailShoots.length) {
+    enqueueBookingConfirmed(String(email).trim(), String(full_name).trim(), mailShoots, config.appName, id);
+  }
   res.status(201).json({ id, shoots: createdShoots });
 });
 

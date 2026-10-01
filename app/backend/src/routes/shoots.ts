@@ -3,7 +3,8 @@ import { v4 as uuid } from 'uuid';
 import { all, get, run, persist, nextCode } from '../db/database';
 import { authenticate } from '../middleware/auth';
 import { shootScope } from '../utils/scope';
-import { enqueueShootMail, ShootMailInfo } from '../notifications';
+import { enqueueShootMail, enqueueBookingConfirmed, enqueueBookingCancelled, ShootMailInfo } from '../notifications';
+import { config } from '../config';
 
 const router = Router();
 router.use(authenticate);
@@ -145,6 +146,12 @@ router.post('/', (req, res) => {
     const info = mailInfo(id);
     if (cp.user) enqueueShootMail('assigned', cp.user, ROLE_LABEL.Photo, info, now);
     if (cm.user) enqueueShootMail('assigned', cm.user, ROLE_LABEL.Makeup, info, now);
+
+    // Email xác nhận chốt lịch gửi khách (nếu khách có email).
+    const cus = get<any>('SELECT full_name, email FROM customers WHERE id = ?', [b.customer_id]);
+    if (cus?.email) {
+      enqueueBookingConfirmed(cus.email, cus.full_name, [{ code: info.code, shoot_type: info.shoot_type, shoot_date: info.shoot_date }], config.appName, id);
+    }
   }
 
   res.status(201).json({ id });
@@ -217,6 +224,16 @@ router.put('/:id', (req, res) => {
   };
   handle('Photo', before.photographer_id, after.photographer_id);
   handle('Makeup', before.makeup_id, after.makeup_id);
+
+  // Buổi vừa chuyển sang Đã hủy -> email báo khách (nếu có email).
+  if (nowCancelled && !wasCancelled) {
+    const cus = get<any>(
+      `SELECT c.full_name, c.email, s.code, s.shoot_type, s.shoot_date
+       FROM shoots s JOIN customers c ON c.id = s.customer_id WHERE s.id = ?`, [req.params.id]);
+    if (cus?.email) {
+      enqueueBookingCancelled(cus.email, cus.full_name, { code: cus.code, shoot_type: cus.shoot_type, shoot_date: cus.shoot_date }, config.appName, now);
+    }
+  }
 
   res.json({ ok: true });
 });
