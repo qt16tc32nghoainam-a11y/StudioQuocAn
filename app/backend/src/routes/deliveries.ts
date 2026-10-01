@@ -2,11 +2,21 @@ import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import { all, get, run, persist } from '../db/database';
 import { authenticate } from '../middleware/auth';
+import { shootScope } from '../utils/scope';
 import { enqueuePhotosDelivered, enqueueRawPhotos, enqueuePromisedDate } from '../notifications';
 import { config } from '../config';
+import { AuthUser } from '../types';
 
 const router = Router();
 router.use(authenticate);
+
+/** Nhân viên chỉ được thao tác giao hình của buổi chụp mình phụ trách. Trả true nếu được phép. */
+function canAccessShoot(user: AuthUser, shoot: { photographer_id?: string | null; makeup_id?: string | null }): boolean {
+  if (user.role === 'Admin') return true;
+  if (user.role === 'Photo') return shoot.photographer_id === user.id;
+  if (user.role === 'Makeup') return shoot.makeup_id === user.id;
+  return false;
+}
 
 /**
  * GET /api/deliveries — bảng theo dõi giao hình (kèm tên khách, ngày chụp).
@@ -19,7 +29,11 @@ router.get('/', (req, res) => {
   if (pending === '1') where.push('d.delivered = 0');
   if (editing === '0') where.push('d.editing_done = 0');
   if (editing === '1') where.push('d.editing_done = 1');
-  if (overdue === '1') { where.push("d.delivered = 0 AND d.due_date IS NOT NULL AND d.due_date < ?"); params.push(new Date().toISOString().slice(0, 10)); }
+  // Quá hạn = chưa giao & đã qua mốc giao (ưu tiên ngày hẹn giao khách promised_date, không có thì dùng hạn nội bộ due_date).
+  if (overdue === '1') { where.push("d.delivered = 0 AND COALESCE(d.promised_date, d.due_date) IS NOT NULL AND COALESCE(d.promised_date, d.due_date) < ?"); params.push(new Date().toISOString().slice(0, 10)); }
+  // Phân quyền: nhân viên chỉ thấy giao hình của buổi mình phụ trách.
+  const scope = shootScope(req.user!, 's');
+  if (scope.clause) { where.push(scope.clause); params.push(...scope.params); }
   const sql = `
     SELECT d.*, s.code AS shoot_code, s.title AS shoot_title, s.shoot_type, s.shoot_date, s.status AS shoot_status,
            c.full_name AS customer_name, c.phone AS customer_phone
@@ -33,8 +47,10 @@ router.get('/', (req, res) => {
 
 /** GET /api/deliveries/:id */
 router.get('/:id', (req, res) => {
-  const d = get('SELECT * FROM deliveries WHERE id = ?', [req.params.id]);
+  const d = get<any>('SELECT * FROM deliveries WHERE id = ?', [req.params.id]);
   if (!d) return res.status(404).json({ error: 'Không tìm thấy bản ghi giao hình' });
+  const shoot = get<any>('SELECT photographer_id, makeup_id FROM shoots WHERE id = ?', [d.shoot_id]);
+  if (!shoot || !canAccessShoot(req.user!, shoot)) return res.status(403).json({ error: 'Không có quyền xem giao hình của buổi này' });
   res.json(d);
 });
 
@@ -45,6 +61,8 @@ router.get('/:id', (req, res) => {
 router.put('/:id', (req, res) => {
   const d = get<any>('SELECT * FROM deliveries WHERE id = ?', [req.params.id]);
   if (!d) return res.status(404).json({ error: 'Không tìm thấy bản ghi giao hình' });
+  const shoot = get<any>('SELECT photographer_id, makeup_id FROM shoots WHERE id = ?', [d.shoot_id]);
+  if (!shoot || !canAccessShoot(req.user!, shoot)) return res.status(403).json({ error: 'Không có quyền cập nhật giao hình của buổi này' });
   const b = req.body || {};
   const now = new Date().toISOString();
 

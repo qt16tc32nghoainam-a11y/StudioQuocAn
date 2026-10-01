@@ -195,17 +195,21 @@ export default function Shoots() {
           </div>
           <div className="field-row">
             <Field label="Tổng tiền (đ)"><input type="number" value={edit.total_amount ?? 0} onChange={(e) => setEdit({ ...edit, total_amount: Number(e.target.value) })} /></Field>
-            <Field label="Đã cọc (đ)"><input type="number" value={edit.deposit_amount ?? 0} onChange={(e) => setEdit({ ...edit, deposit_amount: Number(e.target.value) })} /></Field>
+            {!edit.id ? (
+              <Field label="Cọc ban đầu (đ)" hint="Ghi thành 1 khoản thu. Thu thêm về sau bấm nút Thu tiền.">
+                <input type="number" value={edit.deposit_amount ?? 0} onChange={(e) => setEdit({ ...edit, deposit_amount: Number(e.target.value) })} />
+              </Field>
+            ) : (
+              <Field label="Đã thu" hint="Tự tính từ các khoản thu. Bấm nút Thu tiền để thêm.">
+                <input type="text" value={money(edit.deposit_amount) + (edit.paid_full ? ' · Đã đủ' : '')} disabled />
+              </Field>
+            )}
           </div>
           {!edit.id && (
             <Field label="Ngày khách cần ảnh (hạn giao)" hint="Tạo sẵn bản ghi theo dõi giao hình.">
               <input type="date" value={edit.due_date?.slice(0, 10) || ''} onChange={(e) => setEdit({ ...edit, due_date: e.target.value })} />
             </Field>
           )}
-          <div className="field checkbox">
-            <input type="checkbox" id="paid" checked={!!edit.paid_full} onChange={(e) => setEdit({ ...edit, paid_full: e.target.checked ? 1 : 0 })} />
-            <label htmlFor="paid" style={{ margin: 0 }}>Đã thanh toán đủ</label>
-          </div>
           <Field label="Ghi chú"><textarea value={edit.note || ''} onChange={(e) => setEdit({ ...edit, note: e.target.value })} /></Field>
         </Modal>
       )}

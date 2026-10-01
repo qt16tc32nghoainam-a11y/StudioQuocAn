@@ -79,11 +79,12 @@ router.get('/', (req, res) => {
   const pendingDelivery = get<{ n: number }>(
     `SELECT COUNT(*) AS n FROM deliveries d JOIN shoots s ON s.id = d.shoot_id WHERE d.delivered = 0${dScope}`, myParams
   )?.n || 0;
+  // Quá hạn giao: ưu tiên ngày hẹn giao khách (promised_date), không có thì dùng hạn nội bộ (due_date) — khớp logic trang Giao hình.
   const overdue = all(
-    `SELECT d.id, d.due_date, s.code AS shoot_code, c.full_name AS customer_name
+    `SELECT d.id, COALESCE(d.promised_date, d.due_date) AS due_date, s.code AS shoot_code, c.full_name AS customer_name
      FROM deliveries d JOIN shoots s ON s.id = d.shoot_id JOIN customers c ON c.id = s.customer_id
-     WHERE d.delivered = 0 AND d.due_date IS NOT NULL AND d.due_date < ?${dScope}
-     ORDER BY d.due_date ASC`,
+     WHERE d.delivered = 0 AND COALESCE(d.promised_date, d.due_date) IS NOT NULL AND COALESCE(d.promised_date, d.due_date) < ?${dScope}
+     ORDER BY COALESCE(d.promised_date, d.due_date) ASC`,
     [today, ...myParams]
   );
 

@@ -17,6 +17,13 @@ router.use((req, res, next) => {
 
 const SHOOT_STATUS = ['Đã đặt lịch', 'Đã chụp', 'Đang xử lý hình', 'Chờ giao', 'Hoàn tất', 'Đã hủy'];
 
+/** Ẩn các trường tiền với non-Admin (chỉ Admin thấy tổng tiền/cọc/đã thu). */
+function stripMoney(user: { role: string }, row: any): any {
+  if (!row || user.role === 'Admin') return row;
+  const { total_amount, deposit_amount, paid_full, ...rest } = row;
+  return rest;
+}
+
 /** Chuỗi rỗng -> null (tránh ghi '' vào khóa ngoại). */
 function nn(v: any): string | null {
   if (v === undefined || v === null) return null;
@@ -74,7 +81,7 @@ router.get('/', (req, res) => {
     LEFT JOIN deliveries d ON d.shoot_id = s.id
     ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
     ORDER BY s.shoot_date DESC, s.created_at DESC`;
-  res.json(all(sql, params));
+  res.json(all(sql, params).map((r: any) => stripMoney(req.user!, r)));
 });
 
 /** GET /api/shoots/:id — chi tiết (nhân viên chỉ xem buổi mình được gán). */
@@ -85,7 +92,7 @@ router.get('/:id', (req, res) => {
   if (req.user!.role === 'Makeup' && shoot.makeup_id !== req.user!.id) return res.status(403).json({ error: 'Không có quyền xem buổi chụp này' });
   const customer = get('SELECT * FROM customers WHERE id = ?', [shoot.customer_id]);
   const delivery = get('SELECT * FROM deliveries WHERE shoot_id = ?', [req.params.id]);
-  res.json({ ...shoot, customer, delivery });
+  res.json({ ...stripMoney(req.user!, shoot), customer, delivery });
 });
 
 /** POST /api/shoots — tạo buổi chụp + bản ghi giao hình + email phân công. */
@@ -103,13 +110,16 @@ router.post('/', (req, res) => {
 
   const now = new Date().toISOString();
   const id = uuid();
+  const total = Number(b.total_amount) || 0;
+  const initialDeposit = Number(b.deposit_amount) || 0; // cọc nhập nhanh lúc tạo -> ghi thành 1 khoản thu
+  // deposit_amount & paid_full KHÔNG set thủ công: luôn tính từ bảng payments (nguồn tiền duy nhất).
   run(
     `INSERT INTO shoots (id, code, customer_id, title, package_name, shoot_type, location, shoot_date, start_time, end_time,
        photographer_id, makeup_id, total_amount, deposit_amount, paid_full, status, note, created_by, created_at, updated_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, nextCode('shoots', 'BC'), b.customer_id, nn(b.title), nn(b.package_name), nn(b.shoot_type),
      nn(b.location), nn(b.shoot_date), nn(b.start_time), nn(b.end_time), photographerId, makeupId,
-     Number(b.total_amount) || 0, Number(b.deposit_amount) || 0, b.paid_full ? 1 : 0, b.status || 'Đã đặt lịch',
+     total, 0, 0, b.status || 'Đã đặt lịch',
      nn(b.note), req.user!.id, now, now]
   );
   run(
@@ -117,6 +127,17 @@ router.post('/', (req, res) => {
      VALUES (?,?,?,?,?,?,?)`,
     [uuid(), id, nn(b.due_date), 0, 0, now, now]
   );
+  // Nếu Admin nhập sẵn tiền cọc lúc tạo buổi -> tạo 1 khoản thu "Đặt cọc" để tiền có nguồn gốc rõ ràng.
+  if (initialDeposit > 0) {
+    run(
+      `INSERT INTO payments (id, shoot_id, ngay, so_tien, loai, note, created_by, created_at)
+       VALUES (?,?,?,?,?,?,?,?)`,
+      [uuid(), id, now.slice(0, 10), initialDeposit, 'Đặt cọc', 'Cọc ghi khi tạo buổi', req.user!.id, now]
+    );
+    // Đồng bộ deposit_amount/paid_full theo tổng payments.
+    const paidFull = total > 0 && initialDeposit >= total ? 1 : 0;
+    run('UPDATE shoots SET deposit_amount = ?, paid_full = ? WHERE id = ?', [initialDeposit, paidFull, id]);
+  }
   persist();
 
   // Email phân công (nếu buổi chụp chưa hủy)
@@ -156,11 +177,17 @@ router.put('/:id', (req, res) => {
       b.start_time !== undefined ? nn(b.start_time) : s.start_time,
       b.end_time !== undefined ? nn(b.end_time) : s.end_time,
       newPhotographer, newMakeup,
-      b.total_amount ?? s.total_amount, b.deposit_amount ?? s.deposit_amount,
-      b.paid_full !== undefined ? (b.paid_full ? 1 : 0) : s.paid_full,
+      // deposit_amount & paid_full do bảng payments quản lý — không nhận từ body để tránh lệch số liệu.
+      b.total_amount ?? s.total_amount, s.deposit_amount, s.paid_full,
       b.status ?? s.status, b.note !== undefined ? nn(b.note) : s.note, now, req.params.id,
     ]
   );
+  // Nếu đổi tổng tiền -> tính lại paid_full theo tổng đã thu (tránh lệch khi hạ/nâng giá).
+  if (b.total_amount !== undefined && Number(b.total_amount) !== Number(s.total_amount)) {
+    const paid = (get<{ s: number }>('SELECT COALESCE(SUM(so_tien),0) AS s FROM payments WHERE shoot_id = ?', [req.params.id])?.s) || 0;
+    const newTotal = Number(b.total_amount) || 0;
+    run('UPDATE shoots SET deposit_amount = ?, paid_full = ? WHERE id = ?', [paid, newTotal > 0 && paid >= newTotal ? 1 : 0, req.params.id]);
+  }
   persist();
 
   // Gửi email thông báo
@@ -233,7 +260,11 @@ router.post('/:id/reassign', (req, res) => {
 router.delete('/:id', (req, res) => {
   const s = get<{ id: string }>('SELECT id FROM shoots WHERE id = ?', [req.params.id]);
   if (!s) return res.status(404).json({ error: 'Không tìm thấy buổi chụp' });
+  // Dọn toàn bộ dữ liệu liên quan để không còn bản ghi mồ côi.
   run('DELETE FROM deliveries WHERE shoot_id = ?', [req.params.id]);
+  run('DELETE FROM payments WHERE shoot_id = ?', [req.params.id]);
+  // Chi phí có thể gắn buổi chụp (shoot_id) — gỡ liên kết, giữ lại khoản chi để sổ sách không hụt.
+  run('UPDATE expenses SET shoot_id = NULL WHERE shoot_id = ?', [req.params.id]);
   run('DELETE FROM shoots WHERE id = ?', [req.params.id]);
   persist();
   res.json({ ok: true });

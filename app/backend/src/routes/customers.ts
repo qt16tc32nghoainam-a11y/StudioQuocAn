@@ -2,9 +2,23 @@ import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import { all, get, run, persist, nextCode } from '../db/database';
 import { authenticate } from '../middleware/auth';
+import { shootScope } from '../utils/scope';
+import { AuthUser } from '../types';
 
 const router = Router();
 router.use(authenticate);
+
+/** Nhân viên chỉ thấy khách có ít nhất 1 buổi chụp mình phụ trách. */
+function canAccessCustomer(user: AuthUser, customerId: string): boolean {
+  if (user.role === 'Admin') return true;
+  const scope = shootScope(user, 's');
+  if (!scope.clause) return true;
+  const row = get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM shoots s WHERE s.customer_id = ? AND ${scope.clause}`,
+    [customerId, ...scope.params]
+  );
+  return !!row && row.n > 0;
+}
 // Makeup/Photo chỉ được xem (GET); mọi thao tác ghi chỉ Admin.
 router.use((req, res, next) => {
   if (req.method !== 'GET' && req.user!.role !== 'Admin') {
@@ -13,26 +27,34 @@ router.use((req, res, next) => {
   next();
 });
 
-/** GET /api/customers — danh sách khách, có tìm kiếm ?q= */
+/** GET /api/customers — danh sách khách, có tìm kiếm ?q=. Nhân viên chỉ thấy khách của buổi mình phụ trách. */
 router.get('/', (req, res) => {
   const q = (req.query.q as string || '').trim();
-  let rows;
+  const where: string[] = [];
+  const params: any[] = [];
   if (q) {
     const like = `%${q}%`;
-    rows = all(
-      `SELECT * FROM customers WHERE full_name LIKE ? OR phone LIKE ? OR code LIKE ? ORDER BY created_at DESC`,
-      [like, like, like]
-    );
-  } else {
-    rows = all('SELECT * FROM customers ORDER BY created_at DESC');
+    where.push('(c.full_name LIKE ? OR c.phone LIKE ? OR c.code LIKE ?)');
+    params.push(like, like, like);
   }
-  res.json(rows);
+  // Phân quyền: non-Admin chỉ lấy khách có buổi chụp mình phụ trách.
+  const scope = shootScope(req.user!, 's');
+  if (scope.clause) {
+    where.push(`c.id IN (SELECT s.customer_id FROM shoots s WHERE ${scope.clause})`);
+    params.push(...scope.params);
+  }
+  const sql = `SELECT c.* FROM customers c ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY c.created_at DESC`;
+  res.json(all(sql, params));
 });
 
 /** GET /api/customers/:id — chi tiết khách kèm buổi chụp (đầy đủ: photo, makeup, đã cọc, giao hình, hạn). */
 router.get('/:id', (req, res) => {
   const customer = get('SELECT * FROM customers WHERE id = ?', [req.params.id]);
   if (!customer) return res.status(404).json({ error: 'Không tìm thấy khách hàng' });
+  if (!canAccessCustomer(req.user!, req.params.id)) return res.status(403).json({ error: 'Không có quyền xem khách hàng này' });
+  const isAdmin = req.user!.role === 'Admin';
+  const scope = shootScope(req.user!, 's');
+  const scopeClause = scope.clause ? ` AND ${scope.clause}` : '';
   const shoots = all(
     `SELECT s.*,
             pu.full_name AS photographer_name,
@@ -43,10 +65,14 @@ router.get('/:id', (req, res) => {
      LEFT JOIN users pu ON pu.id = s.photographer_id
      LEFT JOIN users mu ON mu.id = s.makeup_id
      LEFT JOIN deliveries d ON d.shoot_id = s.id
-     WHERE s.customer_id = ?
+     WHERE s.customer_id = ?${scopeClause}
      ORDER BY s.shoot_date DESC, s.created_at DESC`,
-    [req.params.id]
-  );
+    [req.params.id, ...scope.params]
+  ).map((s: any) => {
+    if (isAdmin) return s;
+    const { total_amount, deposit_amount, paid_full, paid_amount, ...rest } = s;
+    return rest;
+  });
   res.json({ ...customer, shoots });
 });
 

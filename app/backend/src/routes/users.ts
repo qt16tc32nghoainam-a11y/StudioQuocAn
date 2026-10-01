@@ -92,9 +92,17 @@ router.delete('/:id', (req, res) => {
   if (req.params.id === req.user!.id) return res.status(400).json({ error: 'Không thể tự xóa tài khoản của bạn' });
   const user = get<{ id: string }>('SELECT id FROM users WHERE id = ?', [req.params.id]);
   if (!user) return res.status(404).json({ error: 'Không tìm thấy người dùng' });
+
+  // Gỡ user khỏi các buổi chụp đang gán & bản ghi giao hình để không còn tham chiếu "treo".
+  const asPhotographer = get<{ n: number }>('SELECT COUNT(*) AS n FROM shoots WHERE photographer_id = ?', [req.params.id])?.n || 0;
+  const asMakeup = get<{ n: number }>('SELECT COUNT(*) AS n FROM shoots WHERE makeup_id = ?', [req.params.id])?.n || 0;
+  run('UPDATE shoots SET photographer_id = NULL WHERE photographer_id = ?', [req.params.id]);
+  run('UPDATE shoots SET makeup_id = NULL WHERE makeup_id = ?', [req.params.id]);
+  run('UPDATE deliveries SET editor_id = NULL WHERE editor_id = ?', [req.params.id]);
+
   run('DELETE FROM users WHERE id = ?', [req.params.id]);
   persist();
-  res.json({ ok: true });
+  res.json({ ok: true, unassigned: { asPhotographer, asMakeup } });
 });
 
 export default router;
