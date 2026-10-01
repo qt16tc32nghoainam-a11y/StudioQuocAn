@@ -55,7 +55,7 @@ button { font-family: inherit; cursor: pointer; }
   display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 5;
 }
 .topbar h1 { font-size: 19px; margin: 0; }
-.content { padding: 24px; max-width: 1200px; width: 100%; }
+.content { padding: 24px; width: 100%; }
 
 /* ---------- Mobile ---------- */
 .burger { display: none; background: none; border: none; font-size: 22px; color: var(--ink); }
