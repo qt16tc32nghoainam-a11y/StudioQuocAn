@@ -174,6 +174,26 @@ export function enqueuePhotosDelivered(email: string, customerName: string, s: C
   insertOutbox(`${s.code}:${email}:photos:${dedupe}`, email, customerName, subject, html);
 }
 
+/** Email báo khách NGÀY HẸN GIAO HÌNH do studio chọn. */
+export function enqueuePromisedDate(email: string, customerName: string, s: CustomerMailShoot, promisedDate: string, studioName: string, dedupe: string): void {
+  if (!email) return;
+  const subject = `[${studioName}] Lịch giao ảnh dự kiến — ${esc(s.code)}`;
+  const html = `
+  <div style="font-family:system-ui,Arial,sans-serif;max-width:560px;margin:0 auto;color:#2a221b">
+    <h2 style="color:#9a6f2c;margin:0 0 6px">${esc(studioName)}</h2>
+    <p>Chào ${esc(customerName)},</p>
+    <p>${esc(studioName)} xin thông báo lịch giao ảnh dự kiến cho buổi chụp của bạn:</p>
+    <table style="width:100%;border-collapse:collapse;font-size:15px">
+      <tr><td style="padding:6px 0;color:#8a7d70;width:150px">Mã buổi chụp</td><td style="padding:6px 0"><b>${esc(s.code)}</b></td></tr>
+      <tr><td style="padding:6px 0;color:#8a7d70">Loại chụp</td><td style="padding:6px 0">${esc(s.shoot_type) || '—'}</td></tr>
+      <tr><td style="padding:6px 0;color:#8a7d70"><b>Ngày giao dự kiến</b></td><td style="padding:6px 0"><b style="color:#9a6f2c;font-size:17px">${dateVN(promisedDate)}</b></td></tr>
+    </table>
+    <p>Chúng tôi sẽ gửi ảnh tới bạn vào ngày trên. Nếu có thay đổi, studio sẽ thông báo lại. Cảm ơn bạn đã kiên nhẫn chờ đợi ❤</p>
+    <p style="color:#8a7d70;font-size:13px;margin-top:18px">Email tự động từ ${esc(studioName)}.</p>
+  </div>`;
+  insertOutbox(`${s.code}:${email}:promised:${dedupe}`, email, customerName, subject, html);
+}
+
 /** Chèn 1 bản ghi vào outbox (chống trùng bằng eventKey). */
 function insertOutbox(eventKey: string, recipient: string, recipientName: string, subject: string, html: string): void {
   const existing = get<{ id: string }>('SELECT id FROM email_outbox WHERE event_key = ?', [eventKey]);

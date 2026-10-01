@@ -88,7 +88,9 @@ CREATE TABLE IF NOT EXISTS shoots (
 CREATE TABLE IF NOT EXISTS deliveries (
   id TEXT PRIMARY KEY,
   shoot_id TEXT NOT NULL,
-  due_date TEXT,                    -- NGÀY KHÁCH CẦN ẢNH / hạn giao
+  due_date TEXT,                    -- hạn nội bộ studio theo dõi
+  promised_date TEXT,               -- NGÀY HẸN GIAO studio báo cho khách (đổi -> gửi mail)
+  promised_notified_date TEXT,      -- ngày hẹn đã gửi mail gần nhất (tránh gửi trùng)
   editor_id TEXT,                   -- người làm hậu kỳ (user)
   raw_link TEXT,                    -- link ẢNH GỐC để khách lựa (ảnh cổng/concept)
   raw_sent INTEGER NOT NULL DEFAULT 0,  -- đã gửi ảnh gốc cho khách lựa chưa

@@ -121,6 +121,8 @@ function migrateAddColumns(): void {
   addCol('deliveries', 'raw_link', 'TEXT');
   addCol('deliveries', 'raw_sent', 'INTEGER NOT NULL DEFAULT 0');
   addCol('deliveries', 'raw_sent_at', 'TEXT');
+  addCol('deliveries', 'promised_date', 'TEXT');
+  addCol('deliveries', 'promised_notified_date', 'TEXT');
 }
 
 /** Ghi DB ra file. */

@@ -5,7 +5,7 @@ import { Modal, Field, Spinner, Empty, dateVN } from '../components/ui';
 interface Delivery {
   id: string; shoot_id: string; shoot_code?: string; shoot_title?: string; shoot_type?: string; shoot_date?: string;
   customer_name?: string; customer_phone?: string;
-  due_date?: string; editor_id?: string; editing_done?: number; editing_done_at?: string;
+  due_date?: string; promised_date?: string; promised_notified_date?: string; editor_id?: string; editing_done?: number; editing_done_at?: string;
   delivered?: number; delivered_at?: string; delivery_method?: string; delivery_link?: string;
   photo_count?: number; note?: string;
   raw_link?: string; raw_sent?: number; raw_sent_at?: string;
@@ -51,7 +51,7 @@ export default function Deliveries() {
   };
 
   const today = new Date().toISOString().slice(0, 10);
-  const isOverdue = (d: Delivery) => !d.delivered && d.due_date && d.due_date.slice(0, 10) < today;
+  const isOverdue = (d: Delivery) => { const dl = (d.promised_date || d.due_date || '').slice(0, 10); return !d.delivered && !!dl && dl < today; };
   const staffName = (id?: string) => staff.find((s) => s.id === id)?.full_name;
 
   const flag = (done?: number) => done
@@ -75,14 +75,14 @@ export default function Deliveries() {
       {!list ? <Spinner /> : list.length === 0 ? <Empty text="Không có bản ghi giao hình phù hợp." /> : (
         <div className="card table-wrap">
           <table>
-            <thead><tr><th>Mã</th><th>Khách</th><th>Ngày chụp</th><th>Hạn giao</th><th>Gửi ảnh gốc</th><th>Làm hình</th><th>Đã giao</th><th>Ngày giao</th><th></th></tr></thead>
+            <thead><tr><th>Mã</th><th>Khách</th><th>Ngày chụp</th><th>Hẹn giao (khách)</th><th>Gửi ảnh gốc</th><th>Làm hình</th><th>Đã giao</th><th>Ngày giao</th><th></th></tr></thead>
             <tbody>
               {list.map((d) => (
                 <tr key={d.id}>
                   <td className="muted">{d.shoot_code}</td>
                   <td><b>{d.customer_name}</b><div className="muted" style={{ fontSize: 12.5 }}>{d.shoot_type || ''}</div></td>
                   <td>{dateVN(d.shoot_date)}</td>
-                  <td style={isOverdue(d) ? { color: 'var(--red)', fontWeight: 600 } : {}}>{dateVN(d.due_date)}</td>
+                  <td style={isOverdue(d) ? { color: 'var(--red)', fontWeight: 600 } : {}}>{dateVN(d.promised_date || d.due_date)}</td>
                   <td>{d.raw_sent ? <span className="badge badge--green">Đã gửi</span> : <span className="badge badge--gray">—</span>}</td>
                   <td>{flag(d.editing_done)}</td>
                   <td>{flag(d.delivered)}</td>
@@ -106,7 +106,7 @@ export default function Deliveries() {
         >
           {err && <div className="msg msg--err">{err}</div>}
           <div className="field-row">
-            <Field label="Ngày khách cần ảnh (hạn giao)"><input type="date" value={edit.due_date?.slice(0, 10) || ''} onChange={(e) => setEdit({ ...edit, due_date: e.target.value })} /></Field>
+            <Field label="Hạn giao (nội bộ)" hint="Mốc studio tự theo dõi, không gửi khách."><input type="date" value={edit.due_date?.slice(0, 10) || ''} onChange={(e) => setEdit({ ...edit, due_date: e.target.value })} /></Field>
             <Field label="Người làm hậu kỳ">
               <select value={edit.editor_id || ''} onChange={(e) => setEdit({ ...edit, editor_id: e.target.value })}>
                 <option value="">— Chọn —</option>
@@ -114,6 +114,15 @@ export default function Deliveries() {
               </select>
             </Field>
           </div>
+          <Field label="📅 Ngày hẹn giao ảnh (báo khách)" hint="Studio chọn ngày giao. Lưu lại sẽ tự gửi email báo khách ngày này.">
+            <input type="date" value={edit.promised_date?.slice(0, 10) || ''} onChange={(e) => setEdit({ ...edit, promised_date: e.target.value })} />
+          </Field>
+          {edit.promised_date && edit.promised_date.slice(0, 10) !== (edit.promised_notified_date || '').slice(0, 10) && (
+            <div className="guide" style={{ marginTop: 2 }}>
+              <span className="guide__ic">✉️</span>
+              <span>Khi lưu, hệ thống sẽ <b>gửi email báo khách ngày giao dự kiến</b> ({dateVN(edit.promised_date)}).</span>
+            </div>
+          )}
 
           {/* Bước 1: gửi ảnh gốc để khách lựa (ảnh cổng/concept). Tùy chọn — buổi tiệc có thể bỏ qua. */}
           <div style={{ border: '1px solid var(--line)', borderRadius: 10, padding: 12, margin: '6px 0 12px' }}>

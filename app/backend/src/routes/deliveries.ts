@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import { all, get, run, persist } from '../db/database';
 import { authenticate } from '../middleware/auth';
-import { enqueuePhotosDelivered, enqueueRawPhotos } from '../notifications';
+import { enqueuePhotosDelivered, enqueueRawPhotos, enqueuePromisedDate } from '../notifications';
 import { config } from '../config';
 
 const router = Router();
@@ -65,12 +65,17 @@ router.put('/:id', (req, res) => {
   if (rawSent && !d.raw_sent) rawSentAt = now;
   if (!rawSent) rawSentAt = null;
 
+  const promisedDate = b.promised_date !== undefined ? (b.promised_date || null) : d.promised_date;
+  // Có cần báo khách ngày hẹn giao không? (vừa đặt / vừa đổi so với lần đã báo gần nhất)
+  const notifyPromised = !!promisedDate && promisedDate !== d.promised_notified_date;
+  const promisedNotifiedDate = notifyPromised ? promisedDate : d.promised_notified_date;
+
   run(
-    `UPDATE deliveries SET due_date=?, editor_id=?, raw_link=?, raw_sent=?, raw_sent_at=?,
+    `UPDATE deliveries SET due_date=?, promised_date=?, promised_notified_date=?, editor_id=?, raw_link=?, raw_sent=?, raw_sent_at=?,
        editing_done=?, editing_done_at=?, delivered=?, delivered_at=?,
        delivery_method=?, delivery_link=?, photo_count=?, note=?, updated_at=? WHERE id=?`,
     [
-      b.due_date ?? d.due_date, b.editor_id ?? d.editor_id,
+      b.due_date ?? d.due_date, promisedDate, promisedNotifiedDate, b.editor_id ?? d.editor_id,
       b.raw_link !== undefined ? b.raw_link : d.raw_link, rawSent, rawSentAt,
       editingDone, editingDoneAt, delivered, deliveredAt,
       b.delivery_method ?? d.delivery_method, b.delivery_link ?? d.delivery_link,
@@ -90,11 +95,15 @@ router.put('/:id', (req, res) => {
   const finalLink = b.delivery_link ?? d.delivery_link;
   const finalMethod = b.delivery_method ?? d.delivery_method;
   const finalRawLink = b.raw_link !== undefined ? b.raw_link : d.raw_link;
-  const needInfo = (rawSent && !d.raw_sent) || (delivered && !d.delivered);
+  const needInfo = (rawSent && !d.raw_sent) || (delivered && !d.delivered) || notifyPromised;
   const info = needInfo ? get<any>(
     `SELECT s.code, s.shoot_type, s.shoot_date, c.full_name AS customer_name, c.email AS customer_email
      FROM shoots s JOIN customers c ON c.id = s.customer_id WHERE s.id = ?`, [d.shoot_id]) : null;
 
+  // Studio đặt/đổi NGÀY HẸN GIAO -> email báo khách (dedupe theo ngày hẹn, mỗi ngày hẹn báo 1 lần).
+  if (notifyPromised && info?.customer_email) {
+    enqueuePromisedDate(info.customer_email, info.customer_name, info, promisedDate, config.appName, promisedDate);
+  }
   // Bước 1: vừa gửi ẢNH GỐC để khách lựa -> email mời chọn ảnh.
   if (rawSent && !d.raw_sent && info?.customer_email) {
     enqueueRawPhotos(info.customer_email, info.customer_name, info, finalRawLink || '', config.appName, d.shoot_id + ':raw');
