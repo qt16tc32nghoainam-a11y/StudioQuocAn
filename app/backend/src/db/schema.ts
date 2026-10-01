@@ -184,6 +184,21 @@ CREATE TABLE IF NOT EXISTS service_packages (
   FOREIGN KEY (created_by) REFERENCES users(id)
 );
 
+-- Thông báo trong app (chuông): nhắc lịch chụp, hạn giao, thu tiền... theo từng user.
+CREATE TABLE IF NOT EXISTS notifications (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,            -- người nhận thông báo
+  type TEXT,                        -- loại: shoot_soon | delivery_due | payment_due | assigned ...
+  title TEXT NOT NULL,
+  body TEXT,
+  link TEXT,                        -- đường dẫn trong app để bấm vào (vd /buoi-chup?q=...)
+  dedupe_key TEXT UNIQUE,           -- chống tạo trùng (vd nhắc 1 lần/ngày/buổi)
+  is_read INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read, created_at);
+
 CREATE INDEX IF NOT EXISTS idx_shoots_customer ON shoots(customer_id);
 CREATE INDEX IF NOT EXISTS idx_shoots_date ON shoots(shoot_date);
 CREATE INDEX IF NOT EXISTS idx_shoots_status ON shoots(status);

@@ -20,7 +20,9 @@ import settingsRoutes from './routes/settings';
 import calendarRoutes from './routes/calendar';
 import importRoutes from './routes/import';
 import packageRoutes from './routes/packages';
+import notificationRoutes from './routes/notifications';
 import { startOutboxWorker } from './notifications';
+import { startScheduler } from './scheduler';
 
 async function main() {
   await initDb();
@@ -30,6 +32,8 @@ async function main() {
 
   // Worker gửi email nền (hàng đợi outbox) — SMTP lỗi không ảnh hưởng thao tác lưu lịch.
   startOutboxWorker();
+  // Nhắc tự động (buổi sắp tới / hạn giao / thu nốt tiền) + tạo thông báo chuông.
+  startScheduler();
 
   const app = express();
   app.use(cors({ origin: config.corsOrigin === '*' ? true : config.corsOrigin.split(',') }));
@@ -58,6 +62,7 @@ async function main() {
   app.use('/api/calendar', calendarRoutes);
   app.use('/api/import', importRoutes);
   app.use('/api/packages', packageRoutes);
+  app.use('/api/notifications', notificationRoutes);
 
   // Phục vụ frontend đã build (production).
   const staticDir = path.join(__dirname, '../public');

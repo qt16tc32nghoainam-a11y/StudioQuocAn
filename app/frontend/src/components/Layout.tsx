@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
+import Notifications from './Notifications';
 
 const NAV = [
   { to: '/', label: 'Tổng quan', ic: '📊', exact: true },
@@ -68,6 +69,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <button className="burger" onClick={() => setOpen(true)}>☰</button>
             <h1>{title}</h1>
           </div>
+          <Notifications />
         </div>
         <div className="content">{children}</div>
       </div>

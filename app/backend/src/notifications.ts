@@ -12,6 +12,23 @@ function esc(s: any): string {
   return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' } as any)[c]);
 }
 
+/**
+ * Tạo 1 thông báo trong app (chuông) cho 1 user. Chống trùng bằng dedupeKey.
+ * Trả về true nếu vừa tạo mới, false nếu đã tồn tại (bỏ qua).
+ */
+export function pushNotify(userId: string, n: { type?: string; title: string; body?: string; link?: string; dedupeKey: string }): boolean {
+  if (!userId) return false;
+  const existing = get<{ id: string }>('SELECT id FROM notifications WHERE dedupe_key = ?', [n.dedupeKey]);
+  if (existing) return false;
+  run(
+    `INSERT INTO notifications (id, user_id, type, title, body, link, dedupe_key, is_read, created_at)
+     VALUES (?,?,?,?,?,?,?,0,?)`,
+    [uuid(), userId, n.type || null, n.title, n.body || null, n.link || null, n.dedupeKey, new Date().toISOString()]
+  );
+  persist();
+  return true;
+}
+
 function dateVN(s?: string | null): string {
   if (!s) return '(chưa có)';
   const m = String(s).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -248,6 +265,22 @@ export function enqueueBookingCancelled(email: string, customerName: string, s: 
     <p style="color:#8a7d70;font-size:13px;margin-top:18px">Email tự động từ ${esc(studioName)}.</p>
   </div>`;
   insertOutbox(`${s.code}:${email}:cancelled-customer:${dedupe}`, email, customerName, subject, html);
+}
+
+/** Email nhắc việc chung (scheduler): nhắc nhân viên buổi chụp sắp tới, hạn giao... */
+export function enqueueReminderMail(email: string, name: string, title: string, body: string, studioName: string, dedupe: string): void {
+  if (!email) return;
+  const subject = `[${studioName}] Nhắc việc: ${title}`;
+  const html = `
+  <div style="font-family:system-ui,Arial,sans-serif;max-width:560px;margin:0 auto;color:#2a221b">
+    <h2 style="color:#9a6f2c;margin:0 0 6px">${esc(studioName)}</h2>
+    <p>Chào ${esc(name)},</p>
+    <p style="font-size:16px"><b>${esc(title)}</b></p>
+    <p>${esc(body)}</p>
+    <p>Vui lòng kiểm tra lịch làm việc trong hệ thống để chuẩn bị. Cảm ơn bạn!</p>
+    <p style="color:#8a7d70;font-size:13px;margin-top:18px">Email tự động từ hệ thống ${esc(studioName)}.</p>
+  </div>`;
+  insertOutbox(`reminder:${dedupe}`, email, name, subject, html);
 }
 
 /** Chèn 1 bản ghi vào outbox (chống trùng bằng eventKey). */
