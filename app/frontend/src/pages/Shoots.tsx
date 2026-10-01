@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { Modal, Field, Spinner, Empty, StatusBadge, money, dateVN } from '../components/ui';
 import { useAuth } from '../lib/auth';
+import ShootCalendar from '../components/ShootCalendar';
 
 interface Shoot {
   id: string; code: string; customer_id: string; customer_name?: string; customer_phone?: string;
@@ -27,6 +28,7 @@ export default function Shoots() {
   const [q, setQ] = useState(sp.get('q') || '');
   const [edit, setEdit] = useState<Partial<Shoot> | null>(null);
   const [err, setErr] = useState('');
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
 
   const load = () => {
     const params = new URLSearchParams();
@@ -48,6 +50,10 @@ export default function Shoots() {
   }, []);
 
   const openNew = () => { setEdit({ status: 'Đã đặt lịch', total_amount: 0, deposit_amount: 0 }); setErr(''); };
+  // Mở form sửa từ 1 id (dùng khi bấm buổi trong chế độ Lịch) — lấy đầy đủ dữ liệu buổi.
+  const openEditById = (id: string) => {
+    api.get<Shoot>(`/shoots/${id}`).then((s) => { setEdit(s); setErr(''); }).catch((e: any) => alert(e.message));
+  };
 
   const save = async (force = false) => {
     if (!edit?.customer_id) { setErr('Chọn khách hàng'); return; }
@@ -94,9 +100,19 @@ export default function Shoots() {
     <>
       <div className="page-head">
         <h1>Buổi chụp</h1>
-        {isSale && <button className="btn" onClick={openNew}>+ Thêm buổi chụp</button>}
+        <div className="btn-row" style={{ alignItems: 'center' }}>
+          <div className="segment" role="tablist" aria-label="Kiểu xem">
+            <button role="tab" aria-selected={viewMode === 'list'} className={viewMode === 'list' ? 'active' : ''} onClick={() => setViewMode('list')}>Danh sách</button>
+            <button role="tab" aria-selected={viewMode === 'calendar'} className={viewMode === 'calendar' ? 'active' : ''} onClick={() => setViewMode('calendar')}>Lịch</button>
+          </div>
+          {isSale && <button className="btn" onClick={openNew}>+ Thêm buổi chụp</button>}
+        </div>
       </div>
 
+      {viewMode === 'calendar' ? (
+        <ShootCalendar onOpenShoot={openEditById} reloadKey={list?.length} />
+      ) : (
+      <>
       <div className="toolbar">
         <input placeholder="Tìm khách / mã / tiêu đề…" value={q} onChange={(e) => setQ(e.target.value)} style={{ minWidth: 200 }} />
         <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}>
@@ -147,6 +163,8 @@ export default function Shoots() {
             </div>
           ))}
         </div>
+      )}
+      </>
       )}
 
       {edit && (

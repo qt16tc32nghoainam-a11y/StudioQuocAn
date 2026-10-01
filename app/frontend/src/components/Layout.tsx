@@ -6,7 +6,6 @@ import Notifications from './Notifications';
 const NAV = [
   { to: '/', label: 'Tổng quan', ic: '📊', exact: true },
   { to: '/khach-hang', label: 'Khách hàng', ic: '👤' },
-  { to: '/lich', label: 'Lịch làm việc', ic: '🗓️' },
   { to: '/buoi-chup', label: 'Buổi chụp', ic: '📅' },
   { to: '/giao-hinh', label: 'Giao hình', ic: '🖼️' },
   { to: '/goi-dich-vu', label: 'Gói dịch vụ', ic: '💼', adminOnly: true },
@@ -20,7 +19,6 @@ const NAV = [
 const TITLES: Record<string, string> = {
   '/': 'Tổng quan',
   '/khach-hang': 'Khách hàng',
-  '/lich': 'Lịch làm việc',
   '/buoi-chup': 'Buổi chụp',
   '/giao-hinh': 'Theo dõi giao hình',
   '/goi-dich-vu': 'Gói dịch vụ',

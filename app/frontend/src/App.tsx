@@ -9,7 +9,6 @@ import Deliveries from './pages/Deliveries';
 import Content from './pages/Content';
 import Users from './pages/Users';
 import Expenses from './pages/Expenses';
-import Calendar from './pages/Calendar';
 import EmailSettings from './pages/EmailSettings';
 import Packages from './pages/Packages';
 import Finance from './pages/Finance';
@@ -27,7 +26,8 @@ export default function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/khach-hang" element={<Customers />} />
         <Route path="/buoi-chup" element={<Shoots />} />
-        <Route path="/lich" element={<Calendar />} />
+        {/* Lịch làm việc tạm ẩn — chuyển sang chế độ Lịch trong Buổi chụp */}
+        <Route path="/lich" element={<Navigate to="/buoi-chup" />} />
         <Route path="/giao-hinh" element={<Deliveries />} />
         <Route path="/chi-phi" element={isAdmin ? <Expenses /> : <Navigate to="/" />} />
         <Route path="/tai-chinh" element={isAdmin ? <Finance /> : <Navigate to="/" />} />
