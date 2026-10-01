@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import { all, get, run, persist } from '../db/database';
 import { authenticate, requireRole } from '../middleware/auth';
-import { enqueueContractConfirmed } from '../notifications';
+import { enqueueDepositReceived, enqueuePaymentCompleted } from '../notifications';
 import { config } from '../config';
 
 const router = Router();
@@ -32,12 +32,14 @@ router.post('/', (req, res) => {
 
   const now = new Date().toISOString();
   const id = uuid();
+  const amount = Number(b.so_tien);
+  const loai = b.loai || 'Đặt cọc';
   run(
     `INSERT INTO payments (id, shoot_id, ngay, so_tien, loai, phuong_thuc, note, created_by, created_at)
      VALUES (?,?,?,?,?,?,?,?,?)`,
-    [id, b.shoot_id, b.ngay || now.slice(0, 10), Number(b.so_tien), b.loai || 'Đặt cọc', b.phuong_thuc || null, b.note || null, req.user!.id, now]
+    [id, b.shoot_id, b.ngay || now.slice(0, 10), amount, loai, b.phuong_thuc || null, b.note || null, req.user!.id, now]
   );
-  syncDeposit(b.shoot_id);
+  syncDeposit(b.shoot_id, { paymentId: id, justPaid: amount, loai });
   persist();
   res.status(201).json({ id });
 });
@@ -67,25 +69,32 @@ router.delete('/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-/** Đồng bộ tiền cọc + đã thanh toán đủ trên buổi chụp theo tổng các khoản thu. */
-function syncDeposit(shootId: string) {
-  const shoot = get<any>('SELECT total_amount FROM shoots WHERE id = ?', [shootId]);
+/** Đồng bộ tiền cọc + đã thanh toán đủ trên buổi chụp theo tổng các khoản thu.
+ *  evt (chỉ khi thêm mới): gửi mail đã nhận tiền (phần còn lại) hoặc hoàn tất. */
+function syncDeposit(shootId: string, evt?: { paymentId: string; justPaid: number; loai: string }) {
+  const shoot = get<any>('SELECT total_amount, paid_full FROM shoots WHERE id = ?', [shootId]);
   if (!shoot) return;
   const wasPaidFull = shoot.paid_full ? 1 : 0;
   const paid = (get<{ s: number }>('SELECT COALESCE(SUM(so_tien),0) AS s FROM payments WHERE shoot_id = ?', [shootId])?.s) || 0;
   const total = Number(shoot.total_amount) || 0;
   const paidFull = total > 0 && paid >= total ? 1 : 0;
+  const remaining = Math.max(0, total - paid);
   run('UPDATE shoots SET deposit_amount = ?, paid_full = ?, updated_at = ? WHERE id = ?', [paid, paidFull, new Date().toISOString(), shootId]);
 
-  // Vừa chuyển sang ĐÃ THANH TOÁN ĐỦ -> gửi email xác nhận hợp đồng cho khách.
+  if (!evt) return; // chỉ gửi mail khi có khoản thu mới
+
+  const info = get<any>(
+    `SELECT s.code, s.shoot_type, s.shoot_date, s.package_name, s.total_amount,
+            c.full_name AS customer_name, c.email AS customer_email
+     FROM shoots s JOIN customers c ON c.id = s.customer_id WHERE s.id = ?`, [shootId]);
+  if (!info?.customer_email) return;
+
   if (paidFull && !wasPaidFull) {
-    const info = get<any>(
-      `SELECT s.code, s.shoot_type, s.shoot_date, s.package_name, s.total_amount,
-              c.full_name AS customer_name, c.email AS customer_email
-       FROM shoots s JOIN customers c ON c.id = s.customer_id WHERE s.id = ?`, [shootId]);
-    if (info?.customer_email) {
-      enqueueContractConfirmed(info.customer_email, info.customer_name, info, config.appName, shootId);
-    }
+    // Vừa đủ tiền -> mail hoàn tất (dedupe theo shoot để chỉ gửi 1 lần)
+    enqueuePaymentCompleted(info.customer_email, info.customer_name, info, config.appName, shootId);
+  } else if (!paidFull) {
+    // Thu một phần -> mail đã nhận X, phần còn lại Y (dedupe theo paymentId -> mỗi lần thu 1 mail)
+    enqueueDepositReceived(info.customer_email, info.customer_name, info, evt.justPaid, paid, remaining, evt.loai, config.appName, evt.paymentId);
   }
 }
 

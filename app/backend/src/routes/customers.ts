@@ -29,11 +29,24 @@ router.get('/', (req, res) => {
   res.json(rows);
 });
 
-/** GET /api/customers/:id — chi tiết khách kèm các buổi chụp. */
+/** GET /api/customers/:id — chi tiết khách kèm buổi chụp (đầy đủ: photo, makeup, đã cọc, giao hình, hạn). */
 router.get('/:id', (req, res) => {
   const customer = get('SELECT * FROM customers WHERE id = ?', [req.params.id]);
   if (!customer) return res.status(404).json({ error: 'Không tìm thấy khách hàng' });
-  const shoots = all('SELECT * FROM shoots WHERE customer_id = ? ORDER BY shoot_date DESC', [req.params.id]);
+  const shoots = all(
+    `SELECT s.*,
+            pu.full_name AS photographer_name,
+            mu.full_name AS makeup_name,
+            d.due_date, d.editing_done, d.delivered, d.delivered_at, d.raw_sent,
+            COALESCE((SELECT SUM(so_tien) FROM payments p WHERE p.shoot_id = s.id), 0) AS paid_amount
+     FROM shoots s
+     LEFT JOIN users pu ON pu.id = s.photographer_id
+     LEFT JOIN users mu ON mu.id = s.makeup_id
+     LEFT JOIN deliveries d ON d.shoot_id = s.id
+     WHERE s.customer_id = ?
+     ORDER BY s.shoot_date DESC, s.created_at DESC`,
+    [req.params.id]
+  );
   res.json({ ...customer, shoots });
 });
 

@@ -87,25 +87,71 @@ function money(n: any): string {
   return v.toLocaleString('vi-VN') + 'đ';
 }
 
-/** Email xác nhận khi khách đã thanh toán đủ / chốt hợp đồng. */
-export function enqueueContractConfirmed(email: string, customerName: string, s: CustomerMailShoot, studioName: string, dedupe: string): void {
+/** Email xác nhận ĐÃ NHẬN TIỀN (cọc hoặc thu thêm) — hiện số đã nhận + phần còn lại. */
+export function enqueueDepositReceived(
+  email: string, customerName: string, s: CustomerMailShoot,
+  justPaid: number, totalPaid: number, remaining: number, loai: string, studioName: string, dedupe: string
+): void {
   if (!email) return;
-  const subject = `[${studioName}] Xác nhận hợp đồng chụp ${esc(s.code)}`;
+  const subject = `[${studioName}] Đã nhận ${loai.toLowerCase()} — hợp đồng ${esc(s.code)}`;
   const html = `
   <div style="font-family:system-ui,Arial,sans-serif;max-width:560px;margin:0 auto;color:#2a221b">
     <h2 style="color:#9a6f2c;margin:0 0 6px">${esc(studioName)}</h2>
     <p>Chào ${esc(customerName)},</p>
-    <p>${esc(studioName)} xác nhận đã nhận đủ thanh toán cho hợp đồng chụp của bạn. Cảm ơn bạn đã tin tưởng ❤</p>
+    <p>${esc(studioName)} xác nhận đã nhận <b>${money(justPaid)}</b> (${esc(loai)}) cho hợp đồng chụp của bạn. Cảm ơn bạn ❤</p>
     <table style="width:100%;border-collapse:collapse;font-size:15px">
-      <tr><td style="padding:6px 0;color:#8a7d70;width:140px">Mã hợp đồng</td><td style="padding:6px 0"><b>${esc(s.code)}</b></td></tr>
+      <tr><td style="padding:6px 0;color:#8a7d70;width:150px">Mã hợp đồng</td><td style="padding:6px 0"><b>${esc(s.code)}</b></td></tr>
       <tr><td style="padding:6px 0;color:#8a7d70">Gói chụp</td><td style="padding:6px 0">${esc(s.package_name) || esc(s.shoot_type) || '—'}</td></tr>
       <tr><td style="padding:6px 0;color:#8a7d70">Ngày chụp</td><td style="padding:6px 0"><b>${dateVN(s.shoot_date)}</b></td></tr>
       <tr><td style="padding:6px 0;color:#8a7d70">Tổng giá trị</td><td style="padding:6px 0">${money(s.total_amount)}</td></tr>
+      <tr><td style="padding:6px 0;color:#8a7d70">Đã thanh toán</td><td style="padding:6px 0">${money(totalPaid)}</td></tr>
+      <tr><td style="padding:6px 0;color:#8a7d70"><b>Phần còn lại</b></td><td style="padding:6px 0"><b style="color:#9a6f2c">${money(remaining)}</b></td></tr>
     </table>
-    <p>Chúng tôi sẽ liên hệ bạn về lịch chụp chi tiết. Nếu cần hỗ trợ, vui lòng phản hồi hoặc liên hệ hotline của studio.</p>
+    <p>Vui lòng thanh toán phần còn lại theo thỏa thuận. Nếu cần hỗ trợ, liên hệ hotline của studio.</p>
     <p style="color:#8a7d70;font-size:13px;margin-top:18px">Email tự động từ ${esc(studioName)}.</p>
   </div>`;
-  insertOutbox(`${s.code}:${email}:contract:${dedupe}`, email, customerName, subject, html);
+  insertOutbox(`${s.code}:${email}:deposit:${dedupe}`, email, customerName, subject, html);
+}
+
+/** Email xác nhận khi khách đã thanh toán ĐỦ. */
+export function enqueuePaymentCompleted(email: string, customerName: string, s: CustomerMailShoot, studioName: string, dedupe: string): void {
+  if (!email) return;
+  const subject = `[${studioName}] Xác nhận hoàn tất thanh toán — hợp đồng ${esc(s.code)}`;
+  const html = `
+  <div style="font-family:system-ui,Arial,sans-serif;max-width:560px;margin:0 auto;color:#2a221b">
+    <h2 style="color:#9a6f2c;margin:0 0 6px">${esc(studioName)}</h2>
+    <p>Chào ${esc(customerName)},</p>
+    <p>${esc(studioName)} xác nhận bạn đã <b>hoàn tất thanh toán</b> cho hợp đồng chụp. Cảm ơn bạn đã tin tưởng ❤</p>
+    <table style="width:100%;border-collapse:collapse;font-size:15px">
+      <tr><td style="padding:6px 0;color:#8a7d70;width:150px">Mã hợp đồng</td><td style="padding:6px 0"><b>${esc(s.code)}</b></td></tr>
+      <tr><td style="padding:6px 0;color:#8a7d70">Gói chụp</td><td style="padding:6px 0">${esc(s.package_name) || esc(s.shoot_type) || '—'}</td></tr>
+      <tr><td style="padding:6px 0;color:#8a7d70">Ngày chụp</td><td style="padding:6px 0"><b>${dateVN(s.shoot_date)}</b></td></tr>
+      <tr><td style="padding:6px 0;color:#8a7d70">Tổng giá trị</td><td style="padding:6px 0"><b>${money(s.total_amount)}</b> (đã thanh toán đủ)</td></tr>
+    </table>
+    <p>Chúng tôi sẽ tiếp tục thực hiện và bàn giao sản phẩm theo thỏa thuận. Nếu cần hỗ trợ, liên hệ hotline của studio.</p>
+    <p style="color:#8a7d70;font-size:13px;margin-top:18px">Email tự động từ ${esc(studioName)}.</p>
+  </div>`;
+  insertOutbox(`${s.code}:${email}:completed:${dedupe}`, email, customerName, subject, html);
+}
+
+/** Email gửi ẢNH GỐC để khách lựa (ảnh cổng/concept). */
+export function enqueueRawPhotos(email: string, customerName: string, s: CustomerMailShoot, link: string, studioName: string, dedupe: string): void {
+  if (!email) return;
+  const subject = `[${studioName}] Mời bạn chọn ảnh — ${esc(s.code)}`;
+  const linkBlock = link
+    ? `<p style="margin:18px 0"><a href="${esc(link)}" style="background:#b98a3e;color:#fff;text-decoration:none;padding:12px 22px;border-radius:9px;font-weight:600;display:inline-block">🖼️ Xem ảnh gốc để chọn</a></p>
+       <p style="font-size:13px;color:#8a7d70;word-break:break-all">Hoặc mở link: <a href="${esc(link)}">${esc(link)}</a></p>`
+    : '<p>Vui lòng liên hệ studio để nhận ảnh gốc.</p>';
+  const html = `
+  <div style="font-family:system-ui,Arial,sans-serif;max-width:560px;margin:0 auto;color:#2a221b">
+    <h2 style="color:#9a6f2c;margin:0 0 6px">${esc(studioName)}</h2>
+    <p>Chào ${esc(customerName)},</p>
+    <p>Studio đã gửi <b>ảnh gốc</b> buổi chụp của bạn (mã ${esc(s.code)}${s.shoot_type ? ' · ' + esc(s.shoot_type) : ''}) để bạn lựa chọn những tấm ưng ý nhất.</p>
+    ${linkBlock}
+    <p><b>Sau khi chọn xong, vui lòng nhắn số thứ tự các ảnh đã chọn qua Zalo của studio</b> để chúng tôi tiến hành chỉnh sửa và hoàn thiện.</p>
+    <p style="color:#8a7d70;font-size:13px;margin-top:18px">Email tự động từ ${esc(studioName)}.</p>
+  </div>`;
+  insertOutbox(`${s.code}:${email}:raw:${dedupe}`, email, customerName, subject, html);
 }
 
 /** Email giao hình: gửi link ảnh cho khách khi đã hoàn thành. */

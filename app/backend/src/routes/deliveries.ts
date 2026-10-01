@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import { all, get, run, persist } from '../db/database';
 import { authenticate } from '../middleware/auth';
-import { enqueuePhotosDelivered } from '../notifications';
+import { enqueuePhotosDelivered, enqueueRawPhotos } from '../notifications';
 import { config } from '../config';
 
 const router = Router();
@@ -50,6 +50,7 @@ router.put('/:id', (req, res) => {
 
   const editingDone = b.editing_done !== undefined ? (b.editing_done ? 1 : 0) : d.editing_done;
   const delivered = b.delivered !== undefined ? (b.delivered ? 1 : 0) : d.delivered;
+  const rawSent = b.raw_sent !== undefined ? (b.raw_sent ? 1 : 0) : d.raw_sent;
 
   // Tự điền mốc thời gian khi trạng thái chuyển sang xong (và xóa khi bỏ tick).
   let editingDoneAt = d.editing_done_at;
@@ -60,11 +61,18 @@ router.put('/:id', (req, res) => {
   if (delivered && !d.delivered) deliveredAt = b.delivered_at || now;
   if (!delivered) deliveredAt = null;
 
+  let rawSentAt = d.raw_sent_at;
+  if (rawSent && !d.raw_sent) rawSentAt = now;
+  if (!rawSent) rawSentAt = null;
+
   run(
-    `UPDATE deliveries SET due_date=?, editor_id=?, editing_done=?, editing_done_at=?, delivered=?, delivered_at=?,
+    `UPDATE deliveries SET due_date=?, editor_id=?, raw_link=?, raw_sent=?, raw_sent_at=?,
+       editing_done=?, editing_done_at=?, delivered=?, delivered_at=?,
        delivery_method=?, delivery_link=?, photo_count=?, note=?, updated_at=? WHERE id=?`,
     [
-      b.due_date ?? d.due_date, b.editor_id ?? d.editor_id, editingDone, editingDoneAt, delivered, deliveredAt,
+      b.due_date ?? d.due_date, b.editor_id ?? d.editor_id,
+      b.raw_link !== undefined ? b.raw_link : d.raw_link, rawSent, rawSentAt,
+      editingDone, editingDoneAt, delivered, deliveredAt,
       b.delivery_method ?? d.delivery_method, b.delivery_link ?? d.delivery_link,
       b.photo_count ?? d.photo_count, b.note ?? d.note, now, req.params.id,
     ]
@@ -79,16 +87,21 @@ router.put('/:id', (req, res) => {
 
   persist();
 
-  // Vừa chuyển sang ĐÃ GIAO -> gửi email link ảnh cho khách.
   const finalLink = b.delivery_link ?? d.delivery_link;
   const finalMethod = b.delivery_method ?? d.delivery_method;
-  if (delivered && !d.delivered) {
-    const info = get<any>(
-      `SELECT s.code, s.shoot_type, s.shoot_date, c.full_name AS customer_name, c.email AS customer_email
-       FROM shoots s JOIN customers c ON c.id = s.customer_id WHERE s.id = ?`, [d.shoot_id]);
-    if (info?.customer_email) {
-      enqueuePhotosDelivered(info.customer_email, info.customer_name, info, finalLink || '', finalMethod || '', config.appName, d.shoot_id);
-    }
+  const finalRawLink = b.raw_link !== undefined ? b.raw_link : d.raw_link;
+  const needInfo = (rawSent && !d.raw_sent) || (delivered && !d.delivered);
+  const info = needInfo ? get<any>(
+    `SELECT s.code, s.shoot_type, s.shoot_date, c.full_name AS customer_name, c.email AS customer_email
+     FROM shoots s JOIN customers c ON c.id = s.customer_id WHERE s.id = ?`, [d.shoot_id]) : null;
+
+  // Bước 1: vừa gửi ẢNH GỐC để khách lựa -> email mời chọn ảnh.
+  if (rawSent && !d.raw_sent && info?.customer_email) {
+    enqueueRawPhotos(info.customer_email, info.customer_name, info, finalRawLink || '', config.appName, d.shoot_id + ':raw');
+  }
+  // Bước 2: vừa GIAO ảnh hoàn thiện -> email ảnh đã sẵn sàng.
+  if (delivered && !d.delivered && info?.customer_email) {
+    enqueuePhotosDelivered(info.customer_email, info.customer_name, info, finalLink || '', finalMethod || '', config.appName, d.shoot_id + ':final');
   }
 
   res.json({ ok: true });

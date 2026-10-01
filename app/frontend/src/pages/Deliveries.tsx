@@ -8,6 +8,7 @@ interface Delivery {
   due_date?: string; editor_id?: string; editing_done?: number; editing_done_at?: string;
   delivered?: number; delivered_at?: string; delivery_method?: string; delivery_link?: string;
   photo_count?: number; note?: string;
+  raw_link?: string; raw_sent?: number; raw_sent_at?: string;
 }
 interface Staff { id: string; full_name: string; }
 
@@ -34,9 +35,12 @@ export default function Deliveries() {
 
   const save = async () => {
     if (!edit) return;
-    // Nhắc dán link khi đánh dấu đã giao (không chặn, chỉ xác nhận) để mail cho khách có link.
+    // Nhắc dán link (không chặn) để email cho khách có link.
+    if (edit.raw_sent && !(edit.raw_link || '').trim()) {
+      if (!confirm('Chưa có Link ảnh gốc. Email mời khách chọn ảnh sẽ không kèm link. Vẫn tiếp tục?')) return;
+    }
     if (edit.delivered && !(edit.delivery_link || '').trim()) {
-      if (!confirm('Chưa có Link ảnh. Email gửi khách sẽ không kèm link tải. Vẫn tiếp tục?')) return;
+      if (!confirm('Chưa có Link ảnh hoàn thiện. Email gửi khách sẽ không kèm link tải. Vẫn tiếp tục?')) return;
     }
     setErr('');
     try {
@@ -71,7 +75,7 @@ export default function Deliveries() {
       {!list ? <Spinner /> : list.length === 0 ? <Empty text="Không có bản ghi giao hình phù hợp." /> : (
         <div className="card table-wrap">
           <table>
-            <thead><tr><th>Mã</th><th>Khách</th><th>Ngày chụp</th><th>Hạn giao</th><th>Làm hình</th><th>Đã giao</th><th>Ngày giao</th><th></th></tr></thead>
+            <thead><tr><th>Mã</th><th>Khách</th><th>Ngày chụp</th><th>Hạn giao</th><th>Gửi ảnh gốc</th><th>Làm hình</th><th>Đã giao</th><th>Ngày giao</th><th></th></tr></thead>
             <tbody>
               {list.map((d) => (
                 <tr key={d.id}>
@@ -79,6 +83,7 @@ export default function Deliveries() {
                   <td><b>{d.customer_name}</b><div className="muted" style={{ fontSize: 12.5 }}>{d.shoot_type || ''}</div></td>
                   <td>{dateVN(d.shoot_date)}</td>
                   <td style={isOverdue(d) ? { color: 'var(--red)', fontWeight: 600 } : {}}>{dateVN(d.due_date)}</td>
+                  <td>{d.raw_sent ? <span className="badge badge--green">Đã gửi</span> : <span className="badge badge--gray">—</span>}</td>
                   <td>{flag(d.editing_done)}</td>
                   <td>{flag(d.delivered)}</td>
                   <td className="muted">{dateVN(d.delivered_at)}</td>
@@ -110,31 +115,52 @@ export default function Deliveries() {
             </Field>
           </div>
 
-          <div className="field checkbox">
-            <input type="checkbox" id="ed" checked={!!edit.editing_done} onChange={(e) => setEdit({ ...edit, editing_done: e.target.checked ? 1 : 0 })} />
-            <label htmlFor="ed" style={{ margin: 0 }}>Đã làm hình xong</label>
-          </div>
-          <div className="field checkbox">
-            <input type="checkbox" id="dv" checked={!!edit.delivered} onChange={(e) => setEdit({ ...edit, delivered: e.target.checked ? 1 : 0 })} />
-            <label htmlFor="dv" style={{ margin: 0 }}>Đã gửi ảnh cho khách</label>
-          </div>
-          {!!edit.delivered && (
-            <div className="guide" style={{ marginTop: 4 }}>
-              <span className="guide__ic">✉️</span>
-              <span>Khi lưu, hệ thống sẽ <b>tự gửi email link ảnh cho khách</b>. Nhớ dán <b>Link ảnh</b> bên dưới trước khi lưu.</span>
+          {/* Bước 1: gửi ảnh gốc để khách lựa (ảnh cổng/concept). Tùy chọn — buổi tiệc có thể bỏ qua. */}
+          <div style={{ border: '1px solid var(--line)', borderRadius: 10, padding: 12, margin: '6px 0 12px' }}>
+            <b style={{ fontSize: 14 }}>Bước 1 — Gửi ảnh gốc để khách lựa</b>
+            <p className="hint" style={{ margin: '2px 0 10px' }}>Dùng cho ảnh cổng / concept. Buổi chỉ giao file hoàn thiện (vd tiệc) thì bỏ qua bước này.</p>
+            <Field label="Link ảnh gốc"><input value={edit.raw_link || ''} onChange={(e) => setEdit({ ...edit, raw_link: e.target.value })} placeholder="https://drive.google.com/…" /></Field>
+            <div className="field checkbox">
+              <input type="checkbox" id="raw" checked={!!edit.raw_sent} onChange={(e) => setEdit({ ...edit, raw_sent: e.target.checked ? 1 : 0 })} />
+              <label htmlFor="raw" style={{ margin: 0 }}>Đã gửi ảnh gốc cho khách lựa</label>
             </div>
-          )}
-
-          <div className="field-row">
-            <Field label="Số ảnh giao"><input type="number" value={edit.photo_count ?? ''} onChange={(e) => setEdit({ ...edit, photo_count: e.target.value ? Number(e.target.value) : undefined })} /></Field>
-            <Field label="Cách giao">
-              <select value={edit.delivery_method || ''} onChange={(e) => setEdit({ ...edit, delivery_method: e.target.value })}>
-                <option value="">— Chọn —</option>
-                {methods.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </Field>
+            {!!edit.raw_sent && (
+              <div className="guide" style={{ marginTop: 4 }}>
+                <span className="guide__ic">✉️</span>
+                <span>Khi lưu, hệ thống <b>gửi email mời khách chọn ảnh</b> kèm link gốc. Khách chọn xong sẽ báo lại qua Zalo.</span>
+              </div>
+            )}
           </div>
-          <Field label="Link ảnh (nếu giao online)"><input value={edit.delivery_link || ''} onChange={(e) => setEdit({ ...edit, delivery_link: e.target.value })} placeholder="https://drive.google.com/…" /></Field>
+
+          {/* Bước 2: giao ảnh hoàn thiện. */}
+          <div style={{ border: '1px solid var(--line)', borderRadius: 10, padding: 12, marginBottom: 12 }}>
+            <b style={{ fontSize: 14 }}>Bước 2 — Giao ảnh hoàn thiện</b>
+            <div className="field checkbox" style={{ marginTop: 8 }}>
+              <input type="checkbox" id="ed" checked={!!edit.editing_done} onChange={(e) => setEdit({ ...edit, editing_done: e.target.checked ? 1 : 0 })} />
+              <label htmlFor="ed" style={{ margin: 0 }}>Đã làm hình xong (hậu kỳ)</label>
+            </div>
+            <Field label="Link ảnh hoàn thiện"><input value={edit.delivery_link || ''} onChange={(e) => setEdit({ ...edit, delivery_link: e.target.value })} placeholder="https://drive.google.com/…" /></Field>
+            <div className="field-row">
+              <Field label="Số ảnh giao"><input type="number" value={edit.photo_count ?? ''} onChange={(e) => setEdit({ ...edit, photo_count: e.target.value ? Number(e.target.value) : undefined })} /></Field>
+              <Field label="Cách giao">
+                <select value={edit.delivery_method || ''} onChange={(e) => setEdit({ ...edit, delivery_method: e.target.value })}>
+                  <option value="">— Chọn —</option>
+                  {methods.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div className="field checkbox">
+              <input type="checkbox" id="dv" checked={!!edit.delivered} onChange={(e) => setEdit({ ...edit, delivered: e.target.checked ? 1 : 0 })} />
+              <label htmlFor="dv" style={{ margin: 0 }}>Đã giao ảnh hoàn thiện cho khách</label>
+            </div>
+            {!!edit.delivered && (
+              <div className="guide" style={{ marginTop: 4 }}>
+                <span className="guide__ic">✉️</span>
+                <span>Khi lưu, hệ thống <b>gửi email link ảnh hoàn thiện cho khách</b>. Nhớ dán Link ảnh hoàn thiện ở trên.</span>
+              </div>
+            )}
+          </div>
+
           <Field label="Ghi chú"><textarea value={edit.note || ''} onChange={(e) => setEdit({ ...edit, note: e.target.value })} /></Field>
           {staffName(edit.editor_id) && <p className="hint">Hậu kỳ: {staffName(edit.editor_id)}</p>}
         </Modal>

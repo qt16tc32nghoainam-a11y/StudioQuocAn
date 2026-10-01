@@ -118,6 +118,9 @@ function migrateAddColumns(): void {
   };
   addCol('shoots', 'start_time', 'TEXT');
   addCol('shoots', 'end_time', 'TEXT');
+  addCol('deliveries', 'raw_link', 'TEXT');
+  addCol('deliveries', 'raw_sent', 'INTEGER NOT NULL DEFAULT 0');
+  addCol('deliveries', 'raw_sent_at', 'TEXT');
 }
 
 /** Ghi DB ra file. */

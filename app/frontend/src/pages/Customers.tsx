@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { Modal, Field, Spinner, Empty } from '../components/ui';
+import { Modal, Field, Spinner, Empty, StatusBadge, money, dateVN } from '../components/ui';
 import { useAuth } from '../lib/auth';
 
 interface Customer {
@@ -15,6 +15,7 @@ export default function Customers() {
   const [list, setList] = useState<Customer[] | null>(null);
   const [q, setQ] = useState('');
   const [edit, setEdit] = useState<Partial<Customer> | null>(null);
+  const [viewId, setViewId] = useState<string | null>(null);
   const [err, setErr] = useState('');
   const [sources, setSources] = useState<string[]>([]);
 
@@ -69,10 +70,11 @@ export default function Customers() {
                   <td className="muted">{c.address || '—'}</td>
                   <td>
                     <div className="btn-row">
-                      {isAdmin ? <>
+                      <button className="btn btn--ghost btn--sm" onClick={() => setViewId(c.id)}>Xem</button>
+                      {isAdmin && <>
                         <button className="btn btn--ghost btn--sm" onClick={() => { setEdit(c); setErr(''); }}>Sửa</button>
                         <button className="btn btn--danger btn--sm" onClick={() => remove(c)}>Xóa</button>
-                      </> : <span className="muted" style={{ fontSize: 13 }}>—</span>}
+                      </>}
                     </div>
                   </td>
                 </tr>
@@ -111,6 +113,70 @@ export default function Customers() {
           <Field label="Ghi chú"><textarea value={edit.note || ''} onChange={(e) => setEdit({ ...edit, note: e.target.value })} /></Field>
         </Modal>
       )}
+
+      {viewId && <CustomerDetail id={viewId} onClose={() => setViewId(null)} />}
     </>
+  );
+}
+
+interface ShootRow {
+  id: string; code: string; title?: string; shoot_type?: string; shoot_date?: string; status?: string;
+  photographer_name?: string; makeup_name?: string; total_amount?: number; paid_amount?: number;
+  due_date?: string; editing_done?: number; delivered?: number; raw_sent?: number;
+}
+
+function CustomerDetail({ id, onClose }: { id: string; onClose: () => void }) {
+  const [data, setData] = useState<any>(undefined);
+  useEffect(() => { api.get(`/customers/${id}`).then(setData).catch(() => setData(null)); }, [id]);
+
+  return (
+    <Modal title={data ? `Khách: ${data.full_name} (${data.code})` : 'Chi tiết khách'} onClose={onClose} wide>
+      {data === undefined ? <Spinner /> : !data ? <Empty text="Không tải được." /> : (
+        <>
+          <div className="field-row">
+            <div><b className="muted" style={{ fontSize: 12.5 }}>Điện thoại</b><div>{data.phone || '—'}</div></div>
+            <div><b className="muted" style={{ fontSize: 12.5 }}>Email</b><div>{data.email || '—'}</div></div>
+          </div>
+          <div className="field-row" style={{ marginTop: 8 }}>
+            <div><b className="muted" style={{ fontSize: 12.5 }}>Nguồn</b><div>{data.source || '—'}</div></div>
+            <div><b className="muted" style={{ fontSize: 12.5 }}>Địa chỉ</b><div>{data.address || '—'}</div></div>
+          </div>
+          {data.note && <p className="muted" style={{ marginTop: 8 }}>Ghi chú: {data.note}</p>}
+
+          <h3 style={{ margin: '18px 0 10px', fontSize: 15 }}>Buổi chụp ({data.shoots?.length || 0})</h3>
+          {(!data.shoots || data.shoots.length === 0) ? <p className="muted">Chưa có buổi chụp.</p> : (
+            <div className="grid" style={{ gap: 10 }}>
+              {data.shoots.map((s: ShootRow) => {
+                const total = Number(s.total_amount) || 0;
+                const paid = Number(s.paid_amount) || 0;
+                const remaining = Math.max(0, total - paid);
+                return (
+                  <div key={s.id} className="card" style={{ background: '#faf7f2', padding: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                      <b>{s.code} — {s.shoot_type || s.title || 'Buổi chụp'}</b>
+                      <StatusBadge status={s.status || ''} />
+                    </div>
+                    <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 6, marginTop: 10, fontSize: 13.5 }}>
+                      <div><span className="muted">Ngày chụp: </span><b>{dateVN(s.shoot_date)}</b></div>
+                      <div><span className="muted">Người chụp: </span>{s.photographer_name || '—'}</div>
+                      <div><span className="muted">Trang điểm: </span>{s.makeup_name || '—'}</div>
+                      <div><span className="muted">Hạn giao: </span>{dateVN(s.due_date)}</div>
+                      <div><span className="muted">Tổng tiền: </span>{money(total)}</div>
+                      <div><span className="muted">Đã cọc/thu: </span><b style={{ color: 'var(--green)' }}>{money(paid)}</b></div>
+                      <div><span className="muted">Phần còn lại: </span><b style={{ color: remaining > 0 ? 'var(--amber)' : 'var(--green)' }}>{money(remaining)}</b></div>
+                    </div>
+                    <div className="btn-row" style={{ marginTop: 10 }}>
+                      <span className={`badge ${s.raw_sent ? 'badge--green' : 'badge--gray'}`}>Ảnh gốc: {s.raw_sent ? 'đã gửi' : 'chưa'}</span>
+                      <span className={`badge ${s.editing_done ? 'badge--green' : 'badge--amber'}`}>Làm hình: {s.editing_done ? 'xong' : 'chưa'}</span>
+                      <span className={`badge ${s.delivered ? 'badge--green' : 'badge--amber'}`}>Giao ảnh: {s.delivered ? 'đã giao' : 'chưa'}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+    </Modal>
   );
 }

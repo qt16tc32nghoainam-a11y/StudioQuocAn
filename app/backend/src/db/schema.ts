@@ -90,6 +90,9 @@ CREATE TABLE IF NOT EXISTS deliveries (
   shoot_id TEXT NOT NULL,
   due_date TEXT,                    -- NGÀY KHÁCH CẦN ẢNH / hạn giao
   editor_id TEXT,                   -- người làm hậu kỳ (user)
+  raw_link TEXT,                    -- link ẢNH GỐC để khách lựa (ảnh cổng/concept)
+  raw_sent INTEGER NOT NULL DEFAULT 0,  -- đã gửi ảnh gốc cho khách lựa chưa
+  raw_sent_at TEXT,                 -- thời điểm gửi ảnh gốc
   editing_done INTEGER NOT NULL DEFAULT 0,      -- ĐÃ LÀM HÌNH CHƯA
   editing_done_at TEXT,             -- thời điểm làm xong hình
   delivered INTEGER NOT NULL DEFAULT 0,         -- ĐÃ GỬI ẢNH CHO KHÁCH CHƯA
