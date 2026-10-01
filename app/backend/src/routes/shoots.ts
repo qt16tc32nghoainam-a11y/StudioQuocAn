@@ -194,6 +194,41 @@ router.put('/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+/**
+ * POST /api/shoots/:id/reassign — tách/chuyển buổi chụp sang khách khác.
+ * body: { customer_id } để gắn vào khách có sẵn, HOẶC { new_customer: { full_name, phone?, email?, address? } }
+ * để tạo khách mới (SĐT/email KHÔNG bắt buộc — dùng cho dọn dữ liệu nhập từ Google).
+ */
+router.post('/:id/reassign', (req, res) => {
+  const shoot = get<{ id: string }>('SELECT id FROM shoots WHERE id = ?', [req.params.id]);
+  if (!shoot) return res.status(404).json({ error: 'Không tìm thấy buổi chụp' });
+  const b = req.body || {};
+  let targetId: string | null = null;
+
+  if (b.customer_id) {
+    const c = get<{ id: string }>('SELECT id FROM customers WHERE id = ?', [b.customer_id]);
+    if (!c) return res.status(400).json({ error: 'Khách hàng không tồn tại' });
+    targetId = b.customer_id;
+  } else if (b.new_customer && String(b.new_customer.full_name || '').trim()) {
+    const nc = b.new_customer;
+    const now = new Date().toISOString();
+    const id = uuid();
+    run(
+      `INSERT INTO customers (id, code, full_name, phone, email, address, note, created_by, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [id, nextCode('customers', 'KH'), String(nc.full_name).trim(), nc.phone || null, nc.email || null, nc.address || null,
+       'Tách từ lịch nhập Google — bổ sung SĐT/email sau.', req.user!.id, now, now]
+    );
+    targetId = id;
+  } else {
+    return res.status(400).json({ error: 'Cần chọn khách có sẵn hoặc nhập tên khách mới' });
+  }
+
+  run('UPDATE shoots SET customer_id = ?, updated_at = ? WHERE id = ?', [targetId, new Date().toISOString(), req.params.id]);
+  persist();
+  res.json({ ok: true, customer_id: targetId });
+});
+
 /** DELETE /api/shoots/:id — xóa buổi chụp + giao hình liên quan. */
 router.delete('/:id', (req, res) => {
   const s = get<{ id: string }>('SELECT id FROM shoots WHERE id = ?', [req.params.id]);

@@ -156,14 +156,50 @@ export default function Customers() {
 }
 
 interface ShootRow {
-  id: string; code: string; title?: string; shoot_type?: string; shoot_date?: string; status?: string;
+  id: string; code: string; title?: string; shoot_type?: string; shoot_date?: string; status?: string; note?: string;
   photographer_name?: string; makeup_name?: string; total_amount?: number; paid_amount?: number;
   due_date?: string; editing_done?: number; delivered?: number; raw_sent?: number;
 }
 
+/** Đoán tên khách gợi ý từ title + note (vd "Chụp cổng" + "Mô tả: hoang nam - bé thảo 6h"). */
+function guessName(s: ShootRow): string {
+  const note = s.note || '';
+  const m = note.match(/Mô tả:\s*(.+)$/);
+  let text = m ? m[1] : '';
+  // bỏ các cụm giờ "6h", "17h", số lượng "2 cổng"
+  text = text.replace(/\b\d+\s*h\b/gi, '').replace(/\(|\)/g, ' ').trim();
+  return text.slice(0, 80);
+}
+
 function CustomerDetail({ id, onClose }: { id: string; onClose: () => void }) {
   const [data, setData] = useState<any>(undefined);
-  useEffect(() => { api.get(`/customers/${id}`).then(setData).catch(() => setData(null)); }, [id]);
+  const [reassign, setReassign] = useState<ShootRow | null>(null);
+  const [newName, setNewName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [existing, setExisting] = useState<{ id: string; full_name: string; code: string }[]>([]);
+  const [targetMode, setTargetMode] = useState<'new' | 'existing'>('new');
+  const [targetId, setTargetId] = useState('');
+
+  const reload = () => api.get(`/customers/${id}`).then(setData).catch(() => setData(null));
+  useEffect(() => { reload(); }, [id]);
+  useEffect(() => { api.get<any[]>('/customers').then((cs) => setExisting(cs.filter((c) => c.id !== id))).catch(() => {}); }, [id]);
+
+  const openReassign = (s: ShootRow) => { setReassign(s); setNewName(guessName(s)); setTargetMode('new'); setTargetId(''); };
+  const doReassign = async () => {
+    if (!reassign) return;
+    setBusy(true);
+    try {
+      if (targetMode === 'existing') {
+        if (!targetId) { alert('Chọn khách'); setBusy(false); return; }
+        await api.post(`/shoots/${reassign.id}/reassign`, { customer_id: targetId });
+      } else {
+        if (!newName.trim()) { alert('Nhập tên khách'); setBusy(false); return; }
+        await api.post(`/shoots/${reassign.id}/reassign`, { new_customer: { full_name: newName.trim() } });
+      }
+      setReassign(null); reload();
+    } catch (e: any) { alert(e.message); }
+    finally { setBusy(false); }
+  };
 
   return (
     <Modal title={data ? `Khách: ${data.full_name} (${data.code})` : 'Chi tiết khách'} onClose={onClose} wide>
@@ -201,10 +237,12 @@ function CustomerDetail({ id, onClose }: { id: string; onClose: () => void }) {
                       <div><span className="muted">Đã cọc/thu: </span><b style={{ color: 'var(--green)' }}>{money(paid)}</b></div>
                       <div><span className="muted">Phần còn lại: </span><b style={{ color: remaining > 0 ? 'var(--amber)' : 'var(--green)' }}>{money(remaining)}</b></div>
                     </div>
-                    <div className="btn-row" style={{ marginTop: 10 }}>
+                    {s.note && s.note.includes('Mô tả:') && <p className="muted" style={{ fontSize: 12.5, marginTop: 8 }}>📝 {s.note.replace('Nhập từ Google Calendar — ', '')}</p>}
+                    <div className="btn-row" style={{ marginTop: 10, alignItems: 'center' }}>
                       <span className={`badge ${s.raw_sent ? 'badge--green' : 'badge--gray'}`}>Ảnh gốc: {s.raw_sent ? 'đã gửi' : 'chưa'}</span>
                       <span className={`badge ${s.editing_done ? 'badge--green' : 'badge--amber'}`}>Làm hình: {s.editing_done ? 'xong' : 'chưa'}</span>
                       <span className={`badge ${s.delivered ? 'badge--green' : 'badge--amber'}`}>Giao ảnh: {s.delivered ? 'đã giao' : 'chưa'}</span>
+                      <button className="btn btn--ghost btn--sm" style={{ marginLeft: 'auto' }} onClick={() => openReassign(s)}>↗ Tách sang khách</button>
                     </div>
                   </div>
                 );
@@ -212,6 +250,36 @@ function CustomerDetail({ id, onClose }: { id: string; onClose: () => void }) {
             </div>
           )}
         </>
+      )}
+
+      {reassign && (
+        <div className="modal-bg" onClick={() => setReassign(null)} style={{ zIndex: 60 }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal__head"><h3>Tách buổi {reassign.code} sang khách</h3><button onClick={() => setReassign(null)}>×</button></div>
+            <div className="modal__body">
+              <div className="btn-row" style={{ marginBottom: 12 }}>
+                <button className={`btn btn--sm ${targetMode === 'new' ? '' : 'btn--ghost'}`} onClick={() => setTargetMode('new')}>Khách mới</button>
+                <button className={`btn btn--sm ${targetMode === 'existing' ? '' : 'btn--ghost'}`} onClick={() => setTargetMode('existing')}>Khách đã có</button>
+              </div>
+              {targetMode === 'new' ? (
+                <Field label="Tên khách (gợi ý từ mô tả Google)" hint="SĐT/email bổ sung sau trong mục Khách hàng.">
+                  <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="VD: Hoàng Nam & Bé Thảo" />
+                </Field>
+              ) : (
+                <Field label="Chọn khách có sẵn">
+                  <select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
+                    <option value="">— Chọn khách —</option>
+                    {existing.map((c) => <option key={c.id} value={c.id}>{c.full_name} ({c.code})</option>)}
+                  </select>
+                </Field>
+              )}
+            </div>
+            <div className="modal__foot">
+              <button className="btn btn--ghost" onClick={() => setReassign(null)}>Hủy</button>
+              <button className="btn" onClick={doReassign} disabled={busy}>{busy ? 'Đang tách…' : 'Tách sang khách'}</button>
+            </div>
+          </div>
+        </div>
       )}
     </Modal>
   );

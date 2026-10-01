@@ -9,7 +9,7 @@ router.use(authenticate, requireRole('Admin'));
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
-interface IcsEvent { summary?: string; location?: string; date?: string; start?: string; end?: string; }
+interface IcsEvent { summary?: string; location?: string; description?: string; date?: string; start?: string; end?: string; }
 
 /** Bỏ unescape ICS (\, \; \n). */
 function unesc(s: string): string {
@@ -57,6 +57,7 @@ function parseIcs(text: string): IcsEvent[] {
     const value = line.slice(idx + 1);
     const key = keyPart.split(';')[0].toUpperCase();
     if (key === 'SUMMARY') cur.summary = unesc(value);
+    else if (key === 'DESCRIPTION') cur.description = unesc(value);
     else if (key === 'LOCATION') cur.location = unesc(value);
     else if (key === 'DTSTART') { const p = parseDt(value); cur.date = p.date; cur.start = p.time; }
     else if (key === 'DTEND') { const p = parseDt(value); cur.end = p.time; }
@@ -104,10 +105,11 @@ router.post('/ics', upload.single('file'), (req, res) => {
     );
     if (dup) { skipped++; continue; }
     const sid = uuid();
+    const noteText = ['Nhập từ Google Calendar', e.description ? 'Mô tả: ' + e.description : ''].filter(Boolean).join(' — ').slice(0, 500);
     run(
       `INSERT INTO shoots (id, code, customer_id, title, shoot_type, location, shoot_date, start_time, end_time, status, note, created_by, created_at, updated_at)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [sid, nextCode('shoots', 'BC'), customerId, title, 'Nhập từ Google', e.location || null, e.date || null, e.start || null, e.end || null, 'Đã đặt lịch', 'Nhập từ Google Calendar', req.user!.id, now, now]
+      [sid, nextCode('shoots', 'BC'), customerId, title, 'Nhập từ Google', e.location || null, e.date || null, e.start || null, e.end || null, 'Đã đặt lịch', noteText, req.user!.id, now, now]
     );
     run(
       `INSERT INTO deliveries (id, shoot_id, editing_done, delivered, raw_sent, created_at, updated_at) VALUES (?,?,?,?,?,?,?)`,
