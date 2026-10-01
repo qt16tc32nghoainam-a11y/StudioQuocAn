@@ -3,13 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { Modal, Field, Spinner, Empty, StatusBadge, money, dateVN } from '../components/ui';
 import { useAuth } from '../lib/auth';
+import PaymentsModal from '../components/PaymentsModal';
 
 interface Customer {
   id: string; code: string; full_name: string; phone?: string; email?: string;
   address?: string; source?: string; note?: string;
 }
 
-interface BookShoot { shoot_type: string; shoot_date?: string; start_time?: string }
+interface BookShoot { shoot_type: string; shoot_date?: string; start_time?: string; package_name?: string; total_amount?: number; deposit_amount?: number; paid_full?: boolean }
 const EMPTY: Partial<Customer> & { shoots?: BookShoot[] } = { full_name: '', phone: '', email: '', address: '', source: '', note: '', shoots: [] };
 
 export default function Customers() {
@@ -21,12 +22,13 @@ export default function Customers() {
   const [err, setErr] = useState('');
   const [sources, setSources] = useState<string[]>([]);
   const [bookingTypes, setBookingTypes] = useState<string[]>([]);
+  const [packages, setPackages] = useState<string[]>([]);
 
   const load = () => {
     api.get<Customer[]>(`/customers${q ? `?q=${encodeURIComponent(q)}` : ''}`).then(setList).catch(() => setList([]));
   };
   useEffect(load, [q]);
-  useEffect(() => { api.get('/meta/options').then((o) => { setSources(o.sources || []); setBookingTypes(o.bookingTypes || []); }).catch(() => {}); }, []);
+  useEffect(() => { api.get('/meta/options').then((o) => { setSources(o.sources || []); setBookingTypes(o.bookingTypes || []); setPackages(o.packages || []); }).catch(() => {}); }, []);
 
   const save = async () => {
     if (!edit?.full_name?.trim()) { setErr('Nhập tên khách hàng'); return; }
@@ -36,6 +38,9 @@ export default function Customers() {
     }
     const bookings = (edit.shoots || []).filter((s) => s.shoot_type);
     if (bookings.some((s) => !s.shoot_date)) { setErr('Mỗi buổi chụp cần chọn ngày dự tính'); return; }
+    if (bookings.some((s) => !s.paid_full && Number(s.deposit_amount) > 0 && Number(s.total_amount) > 0 && Number(s.deposit_amount) > Number(s.total_amount))) {
+      setErr('Tiền cọc không được lớn hơn tổng tiền'); return;
+    }
     setErr('');
     try {
       if (edit.id) await api.put(`/customers/${edit.id}`, edit);
@@ -127,25 +132,51 @@ export default function Customers() {
               </div>
               <p className="hint" style={{ margin: '2px 0 10px' }}>Khách book nhiều loại cùng lúc thì thêm nhiều dòng. Mỗi buổi sẽ tự lên Lịch làm việc + Google Calendar. (Gán người chụp / giá bổ sung sau trong mục Buổi chụp.)</p>
               {(edit.shoots || []).length === 0 && <p className="muted" style={{ fontSize: 13 }}>Chưa thêm buổi nào. Có thể để trống và tạo buổi chụp sau.</p>}
-              {(edit.shoots || []).map((bk, i) => (
-                <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginBottom: 8, flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: 150 }}>
-                    <label style={{ fontSize: 12.5, color: 'var(--muted)', fontWeight: 600, display: 'block', marginBottom: 4 }}>Loại chụp</label>
-                    <select value={bk.shoot_type} onChange={(e) => { const n = [...edit.shoots!]; n[i] = { ...n[i], shoot_type: e.target.value }; setEdit({ ...edit, shoots: n }); }} style={{ width: '100%', padding: '9px 11px', border: '1px solid var(--line)', borderRadius: 9 }}>
-                      {bookingTypes.map((t) => <option key={t} value={t}>{t}</option>)}
-                    </select>
+              {(edit.shoots || []).map((bk, i) => {
+                const upd = (patch: Partial<BookShoot>) => { const n = [...edit.shoots!]; n[i] = { ...n[i], ...patch }; setEdit({ ...edit, shoots: n }); };
+                const total = Number(bk.total_amount) || 0;
+                const dep = bk.paid_full ? total : (Number(bk.deposit_amount) || 0);
+                const remain = Math.max(0, total - dep);
+                return (
+                <div key={i} className="card" style={{ background: '#faf7f2', padding: 12, marginBottom: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <b style={{ fontSize: 13.5, color: 'var(--gold-dark)' }}>Buổi {i + 1}</b>
+                    <button type="button" className="btn btn--danger btn--sm" onClick={() => setEdit({ ...edit, shoots: edit.shoots!.filter((_, x) => x !== i) })}>× Xóa buổi</button>
                   </div>
-                  <div style={{ width: 150 }}>
-                    <label style={{ fontSize: 12.5, color: 'var(--muted)', fontWeight: 600, display: 'block', marginBottom: 4 }}>Ngày dự tính</label>
-                    <input type="date" value={bk.shoot_date || ''} onChange={(e) => { const n = [...edit.shoots!]; n[i] = { ...n[i], shoot_date: e.target.value }; setEdit({ ...edit, shoots: n }); }} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 9 }} />
+                  <div className="field-row">
+                    <Field label="Loại chụp">
+                      <select value={bk.shoot_type} onChange={(e) => upd({ shoot_type: e.target.value })}>
+                        {bookingTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="Gói dịch vụ">
+                      <input list={`pkg-${i}`} value={bk.package_name || ''} onChange={(e) => upd({ package_name: e.target.value })} placeholder="Chọn hoặc nhập gói" />
+                      <datalist id={`pkg-${i}`}>{packages.map((p) => <option key={p} value={p} />)}</datalist>
+                    </Field>
                   </div>
-                  <div style={{ width: 110 }}>
-                    <label style={{ fontSize: 12.5, color: 'var(--muted)', fontWeight: 600, display: 'block', marginBottom: 4 }}>Giờ (nếu có)</label>
-                    <input type="time" value={bk.start_time || ''} onChange={(e) => { const n = [...edit.shoots!]; n[i] = { ...n[i], start_time: e.target.value }; setEdit({ ...edit, shoots: n }); }} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 9 }} />
+                  <div className="field-row">
+                    <Field label="Ngày dự tính">
+                      <input type="date" value={bk.shoot_date || ''} onChange={(e) => upd({ shoot_date: e.target.value })} />
+                    </Field>
+                    <Field label="Giờ (nếu có)">
+                      <input type="time" value={bk.start_time || ''} onChange={(e) => upd({ start_time: e.target.value })} />
+                    </Field>
                   </div>
-                  <button type="button" className="btn btn--danger btn--sm" onClick={() => setEdit({ ...edit, shoots: edit.shoots!.filter((_, x) => x !== i) })}>×</button>
+                  <div className="field-row">
+                    <Field label="Tổng tiền (đ)">
+                      <input type="number" value={bk.total_amount ?? 0} onChange={(e) => upd({ total_amount: Number(e.target.value) })} />
+                    </Field>
+                    <Field label="Đã cọc (đ)" hint={bk.paid_full ? 'Đã tick thu đủ — bỏ qua ô này.' : (total > 0 ? `Còn lại: ${money(remain)}` : undefined)}>
+                      <input type="number" value={bk.deposit_amount ?? 0} disabled={!!bk.paid_full} onChange={(e) => upd({ deposit_amount: Number(e.target.value) })} />
+                    </Field>
+                  </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, marginTop: 4, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={!!bk.paid_full} onChange={(e) => upd({ paid_full: e.target.checked })} />
+                    Khách đã thanh toán đủ
+                  </label>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </Modal>
@@ -176,6 +207,7 @@ function CustomerDetail({ id, onClose }: { id: string; onClose: () => void }) {
   const { isAdmin } = useAuth();
   const nav = useNavigate();
   const [data, setData] = useState<any>(undefined);
+  const [pay, setPay] = useState<ShootRow | null>(null);
   const [reassign, setReassign] = useState<ShootRow | null>(null);
   const [newName, setNewName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -245,8 +277,9 @@ function CustomerDetail({ id, onClose }: { id: string; onClose: () => void }) {
                       <span className={`badge ${s.raw_sent ? 'badge--green' : 'badge--gray'}`}>Ảnh gốc: {s.raw_sent ? 'đã gửi' : 'chưa'}</span>
                       <span className={`badge ${s.editing_done ? 'badge--green' : 'badge--amber'}`}>Làm hình: {s.editing_done ? 'xong' : 'chưa'}</span>
                       <span className={`badge ${s.delivered ? 'badge--green' : 'badge--amber'}`}>Giao ảnh: {s.delivered ? 'đã giao' : 'chưa'}</span>
-                      <button className="btn btn--ghost btn--sm" style={{ marginLeft: 'auto' }} onClick={() => { onClose(); nav(`/buoi-chup?q=${encodeURIComponent(s.code)}`); }}>Mở buổi ↗</button>
-                      {isAdmin && <button className="btn btn--ghost btn--sm" onClick={() => openReassign(s)}>↗ Tách sang khách</button>}
+                      {isAdmin && <button className="btn btn--sm" style={{ marginLeft: 'auto' }} onClick={() => setPay(s)}>💰 Thu tiền</button>}
+                      <button className="btn btn--ghost btn--sm" style={isAdmin ? {} : { marginLeft: 'auto' }} onClick={() => { onClose(); nav(`/buoi-chup?q=${encodeURIComponent(s.code)}`); }}>Mở buổi ↗</button>
+                      {isAdmin && <button className="btn btn--ghost btn--sm" onClick={() => openReassign(s)}>↗ Tách khách</button>}
                     </div>
                   </div>
                 );
@@ -284,6 +317,15 @@ function CustomerDetail({ id, onClose }: { id: string; onClose: () => void }) {
             </div>
           </div>
         </div>
+      )}
+
+      {pay && (
+        <PaymentsModal
+          shootId={pay.id}
+          shootLabel={`${pay.code} — ${pay.shoot_type || pay.title || ''}`}
+          onClose={() => setPay(null)}
+          onChanged={reload}
+        />
       )}
     </Modal>
   );

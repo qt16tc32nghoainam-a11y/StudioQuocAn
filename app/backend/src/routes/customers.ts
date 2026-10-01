@@ -98,6 +98,11 @@ router.post('/', (req, res) => {
   for (const s of list) {
     if (!s || !s.shoot_type) return res.status(400).json({ error: 'Mỗi buổi chụp phải chọn loại chụp' });
     if (s.status && !SHOOT_STATUS.includes(s.status)) return res.status(400).json({ error: 'Trạng thái buổi chụp không hợp lệ' });
+    if (s.total_amount != null && Number(s.total_amount) < 0) return res.status(400).json({ error: 'Tổng tiền không hợp lệ' });
+    if (s.deposit_amount != null && Number(s.deposit_amount) < 0) return res.status(400).json({ error: 'Số tiền cọc không hợp lệ' });
+    if (Number(s.deposit_amount) > 0 && Number(s.total_amount) > 0 && Number(s.deposit_amount) > Number(s.total_amount)) {
+      return res.status(400).json({ error: 'Tiền cọc không được lớn hơn tổng tiền' });
+    }
   }
 
   const now = new Date().toISOString();
@@ -113,16 +118,32 @@ router.post('/', (req, res) => {
   for (const s of list) {
     const sid = uuid();
     const code = nextCode('shoots', 'BC');
+    const total = Number(s.total_amount) || 0;
+    const initialDeposit = Number(s.deposit_amount) || 0;
+    // paid_full: nếu Sale tick "đã thu đủ" thì coi như thu đủ (ghi deposit = total); nếu không thì theo cọc đã nhập.
+    const markPaidFull = !!s.paid_full && total > 0;
+    const paidAmount = markPaidFull ? total : initialDeposit;
+    const paidFull = markPaidFull || (total > 0 && paidAmount >= total) ? 1 : 0;
     run(
-      `INSERT INTO shoots (id, code, customer_id, title, shoot_type, shoot_date, start_time, end_time, status, created_by, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [sid, code, id, null, s.shoot_type, s.shoot_date || null, s.start_time || null, s.end_time || null, s.status || 'Đã đặt lịch', req.user!.id, now, now]
+      `INSERT INTO shoots (id, code, customer_id, title, package_name, shoot_type, shoot_date, start_time, end_time,
+         total_amount, deposit_amount, paid_full, status, created_by, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [sid, code, id, null, s.package_name || null, s.shoot_type, s.shoot_date || null, s.start_time || null, s.end_time || null,
+       total, paidAmount, paidFull, s.status || 'Đã đặt lịch', req.user!.id, now, now]
     );
     run(
       `INSERT INTO deliveries (id, shoot_id, editing_done, delivered, raw_sent, created_at, updated_at)
        VALUES (?,?,?,?,?,?,?)`,
       [uuid(), sid, 0, 0, 0, now, now]
     );
+    // Ghi khoản thu để tiền có nguồn gốc (payments là nguồn tiền duy nhất).
+    if (paidAmount > 0) {
+      run(
+        `INSERT INTO payments (id, shoot_id, ngay, so_tien, loai, note, created_by, created_at)
+         VALUES (?,?,?,?,?,?,?,?)`,
+        [uuid(), sid, now.slice(0, 10), paidAmount, markPaidFull ? 'Tất toán' : 'Đặt cọc', 'Ghi khi tạo khách', req.user!.id, now]
+      );
+    }
     createdShoots.push(sid);
     // Chỉ xác nhận các buổi chưa hủy.
     if ((s.status || 'Đã đặt lịch') !== 'Đã hủy') {

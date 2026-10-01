@@ -202,18 +202,17 @@ export default function Shoots() {
               </select>
             </Field>
           </div>
-          <div className="field-row">
-            <Field label="Tổng tiền (đ)"><input type="number" value={edit.total_amount ?? 0} onChange={(e) => setEdit({ ...edit, total_amount: Number(e.target.value) })} /></Field>
-            {!edit.id ? (
-              <Field label="Cọc ban đầu (đ)" hint="Ghi thành 1 khoản thu. Thu thêm về sau bấm nút Thu tiền.">
-                <input type="number" value={edit.deposit_amount ?? 0} onChange={(e) => setEdit({ ...edit, deposit_amount: Number(e.target.value) })} />
+          {/* Tiền & gói do Sale quản lý ở mục Khách hàng. Ở đây chỉ hiện để tham khảo, không nhập. */}
+          {edit.id && isAdmin && (
+            <div className="field-row">
+              <Field label="Tổng tiền (đ)" hint="Sửa tiền/cọc trong mục Khách hàng.">
+                <input type="text" value={money(edit.total_amount)} disabled />
               </Field>
-            ) : (
-              <Field label="Đã thu" hint="Tự tính từ các khoản thu. Bấm nút Thu tiền để thêm.">
+              <Field label="Đã thu">
                 <input type="text" value={money(edit.deposit_amount) + (edit.paid_full ? ' · Đã đủ' : '')} disabled />
               </Field>
-            )}
-          </div>
+            </div>
+          )}
           {!edit.id && (
             <Field label="Ngày khách cần ảnh (hạn giao)" hint="Tạo sẵn bản ghi theo dõi giao hình.">
               <input type="date" value={edit.due_date?.slice(0, 10) || ''} onChange={(e) => setEdit({ ...edit, due_date: e.target.value })} />
