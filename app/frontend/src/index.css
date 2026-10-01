@@ -216,3 +216,38 @@ tbody tr:hover { background: #faf7f2; }
 /* Các bước hướng dẫn 1-2-3 trên thanh công bố */
 .steps { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--muted); flex-wrap: wrap; }
 .steps b { color: var(--ink); }
+
+/* ============ Tối ưu điện thoại + PWA ============ */
+/* Safe area cho iPhone (tai thỏ / thanh dưới) */
+@supports (padding: max(0px)) {
+  .sidebar { padding-bottom: env(safe-area-inset-bottom); }
+  .topbar { padding-top: max(14px, env(safe-area-inset-top)); }
+}
+
+@media (max-width: 860px) {
+  /* Bảng cuộn ngang mượt trên điện thoại, không vỡ layout */
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { min-width: 560px; }
+  /* Modal chiếm gần full màn hình điện thoại cho dễ thao tác */
+  .modal-bg { padding: 0; align-items: flex-end; }
+  .modal, .modal--wide { max-width: 100%; width: 100%; border-radius: 16px 16px 0 0; max-height: 94vh; display: flex; flex-direction: column; }
+  .modal__body { overflow-y: auto; }
+  /* Vùng chạm đủ lớn (>=44px) */
+  .btn { padding: 11px 16px; }
+  .btn--sm { padding: 9px 13px; }
+  .sidebar__nav a { padding: 14px 18px; }
+  /* Toolbar xuống dòng gọn */
+  .toolbar { gap: 8px; }
+  .toolbar input, .toolbar select { flex: 1 1 auto; min-width: 0; }
+  .page-head h1 { font-size: 19px; }
+  /* Field 2 cột -> 1 cột đã có; đảm bảo input không tràn */
+  .field input, .field select, .field textarea { font-size: 16px; } /* 16px tránh iOS tự zoom khi focus */
+}
+
+/* Nút cài PWA (hiện khi trình duyệt hỗ trợ) */
+.pwa-install {
+  position: fixed; right: 16px; bottom: 16px; z-index: 70;
+  background: var(--gold); color: #fff; border: none; border-radius: 999px;
+  padding: 12px 18px; font-weight: 600; font-size: 14px; box-shadow: 0 6px 20px rgba(40,30,20,.25);
+}
+.pwa-install:hover { background: var(--gold-dark); }
