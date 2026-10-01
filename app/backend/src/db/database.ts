@@ -124,6 +124,8 @@ function migrateAddColumns(): void {
   addCol('deliveries', 'promised_date', 'TEXT');
   addCol('deliveries', 'promised_notified_date', 'TEXT');
   addCol('users', 'calendar_token', 'TEXT');
+  addCol('shoots', 'package_id', 'TEXT');            // gói dịch vụ đã chọn (liên kết service_packages)
+  addCol('shoots', 'extra_cost', 'REAL DEFAULT 0');  // chi phí phát sinh thêm (quay, concept thêm...)
 }
 
 /** Ghi DB ra file. */

@@ -19,6 +19,7 @@ import expenseRoutes from './routes/expenses';
 import settingsRoutes from './routes/settings';
 import calendarRoutes from './routes/calendar';
 import importRoutes from './routes/import';
+import packageRoutes from './routes/packages';
 import { startOutboxWorker } from './notifications';
 
 async function main() {
@@ -56,6 +57,7 @@ async function main() {
   app.use('/api/settings', settingsRoutes);
   app.use('/api/calendar', calendarRoutes);
   app.use('/api/import', importRoutes);
+  app.use('/api/packages', packageRoutes);
 
   // Phục vụ frontend đã build (production).
   const staticDir = path.join(__dirname, '../public');

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { all } from '../db/database';
+import { all, get } from '../db/database';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -16,8 +16,8 @@ router.get('/options', (_req, res) => {
     shootStatus: ['Đã đặt lịch', 'Đã chụp', 'Đang xử lý hình', 'Chờ giao', 'Hoàn tất', 'Đã hủy'],
     shootTypes: ['Chụp ảnh cổng', 'Chụp tiệc đính hôn', 'Chụp tiệc cưới', 'Ngoại cảnh', 'Phim trường', 'Studio', 'Concept Beauty', 'Make-up cô dâu', 'Phóng sự cưới', 'Đám hỏi', 'Mâm quả cưới hỏi', 'Gia đình & Baby', 'Khác'],
     bookingTypes: ['Chụp ảnh cổng', 'Chụp tiệc đính hôn', 'Chụp tiệc cưới'],
-    // Gói chụp gợi ý cho Sale chọn nhanh (vẫn cho nhập tự do nếu khác).
-    packages: ['Gói cơ bản', 'Gói tiêu chuẩn', 'Gói nâng cao', 'Gói cưới trọn gói', 'Gói cưới trọn gói VIP', 'Gói phóng sự', 'Gói chụp cổng', 'Gói tiệc cưới', 'Khác'],
+    // Gói dịch vụ lấy từ module Gói (service_packages) để mapping giá khi tạo khách.
+    packages: all('SELECT id, name, price, unit FROM service_packages ORDER BY sort_order ASC, created_at ASC'),
     sources: ['Facebook', 'Zalo', 'Instagram', 'Giới thiệu', 'Hotline', 'Website', 'Khác'],
     deliveryMethods: ['Google Drive', 'Link tải', 'USB', 'In ảnh', 'Zalo', 'Khác'],
     paymentTypes: ['Đặt cọc', 'Thanh toán thêm', 'Tất toán'],

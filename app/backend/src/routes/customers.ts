@@ -92,22 +92,29 @@ const SHOOT_STATUS = ['Đã đặt lịch', 'Đã chụp', 'Đang xử lý hình
  * Mỗi buổi chụp tạo kèm 1 bản ghi giao hình.
  */
 router.post('/', (req, res) => {
-  const { full_name, phone, email, address, source, note, shoots } = req.body || {};
+  // deposit_amount & paid_full giờ ở CẤP KHÁCH (thu/đặt cọc 1 lần cho cả đơn), không theo từng buổi.
+  const { full_name, phone, email, address, source, note, shoots, deposit_amount, paid_full } = req.body || {};
   if (!full_name || !String(full_name).trim()) return res.status(400).json({ error: 'Thiếu tên khách hàng' });
   if (!phone || !String(phone).trim()) return res.status(400).json({ error: 'Vui lòng nhập số điện thoại khách hàng' });
   if (!email || !EMAIL_RE.test(String(email).trim())) {
     return res.status(400).json({ error: 'Vui lòng nhập email khách hàng hợp lệ (dùng để gửi mail hợp đồng và giao ảnh)' });
   }
-  // Validate các buổi chụp (nếu có)
+  // Validate các buổi chụp (nếu có). Tổng mỗi buổi = giá gói + chi phí phát sinh (extra_cost).
   const list: any[] = Array.isArray(shoots) ? shoots : [];
   for (const s of list) {
     if (!s || !s.shoot_type) return res.status(400).json({ error: 'Mỗi buổi chụp phải chọn loại chụp' });
     if (s.status && !SHOOT_STATUS.includes(s.status)) return res.status(400).json({ error: 'Trạng thái buổi chụp không hợp lệ' });
     if (s.total_amount != null && Number(s.total_amount) < 0) return res.status(400).json({ error: 'Tổng tiền không hợp lệ' });
-    if (s.deposit_amount != null && Number(s.deposit_amount) < 0) return res.status(400).json({ error: 'Số tiền cọc không hợp lệ' });
-    if (Number(s.deposit_amount) > 0 && Number(s.total_amount) > 0 && Number(s.deposit_amount) > Number(s.total_amount)) {
-      return res.status(400).json({ error: 'Tiền cọc không được lớn hơn tổng tiền' });
-    }
+    if (s.extra_cost != null && Number(s.extra_cost) < 0) return res.status(400).json({ error: 'Chi phí phát sinh không hợp lệ' });
+  }
+  const customerDeposit = Number(deposit_amount) || 0;
+  if (customerDeposit < 0) return res.status(400).json({ error: 'Số tiền cọc không hợp lệ' });
+
+  // Tổng giá trị cả đơn = tổng (giá gói + phát sinh) của mọi buổi.
+  const shootTotals = list.map((s) => (Number(s.total_amount) || 0) + (Number(s.extra_cost) || 0));
+  const grandTotal = shootTotals.reduce((a, b) => a + b, 0);
+  if (customerDeposit > grandTotal && grandTotal > 0) {
+    return res.status(400).json({ error: 'Tiền cọc không được lớn hơn tổng giá trị các buổi' });
   }
 
   const now = new Date().toISOString();
@@ -118,23 +125,29 @@ router.post('/', (req, res) => {
     [id, nextCode('customers', 'KH'), String(full_name).trim(), String(phone).trim(), String(email).trim(), address || null, source || null, note || null, req.user!.id, now, now]
   );
 
+  // Phân bổ tiền đã thu về từng buổi:
+  //  - Nếu "đã thanh toán đủ toàn bộ": mỗi buổi thu đủ tổng của nó.
+  //  - Nếu có cọc tổng: rải lần lượt vào các buổi (buổi đầu trước) tới khi hết cọc.
+  const markAllPaid = !!paid_full && grandTotal > 0;
+  let depositLeft = markAllPaid ? grandTotal : customerDeposit;
+
   const createdShoots: string[] = [];
   const mailShoots: { code: string; shoot_type?: string; shoot_date?: string }[] = [];
-  for (const s of list) {
+  for (let i = 0; i < list.length; i++) {
+    const s = list[i];
     const sid = uuid();
     const code = nextCode('shoots', 'BC');
-    const total = Number(s.total_amount) || 0;
-    const initialDeposit = Number(s.deposit_amount) || 0;
-    // paid_full: nếu Sale tick "đã thu đủ" thì coi như thu đủ (ghi deposit = total); nếu không thì theo cọc đã nhập.
-    const markPaidFull = !!s.paid_full && total > 0;
-    const paidAmount = markPaidFull ? total : initialDeposit;
-    const paidFull = markPaidFull || (total > 0 && paidAmount >= total) ? 1 : 0;
+    const total = shootTotals[i]; // giá gói + phát sinh
+    // Phần tiền thu phân bổ cho buổi này
+    const paidAmount = Math.min(total, Math.max(0, depositLeft));
+    depositLeft -= paidAmount;
+    const paidFull = total > 0 && paidAmount >= total ? 1 : 0;
     run(
-      `INSERT INTO shoots (id, code, customer_id, title, package_name, shoot_type, shoot_date, start_time, end_time,
-         total_amount, deposit_amount, paid_full, status, created_by, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [sid, code, id, null, s.package_name || null, s.shoot_type, s.shoot_date || null, s.start_time || null, s.end_time || null,
-       total, paidAmount, paidFull, s.status || 'Đã đặt lịch', req.user!.id, now, now]
+      `INSERT INTO shoots (id, code, customer_id, title, package_id, package_name, shoot_type, shoot_date, start_time, end_time,
+         total_amount, extra_cost, deposit_amount, paid_full, status, created_by, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [sid, code, id, null, s.package_id || null, s.package_name || null, s.shoot_type, s.shoot_date || null, s.start_time || null, s.end_time || null,
+       total, Number(s.extra_cost) || 0, paidAmount, paidFull, s.status || 'Đã đặt lịch', req.user!.id, now, now]
     );
     run(
       `INSERT INTO deliveries (id, shoot_id, editing_done, delivered, raw_sent, created_at, updated_at)
@@ -146,11 +159,10 @@ router.post('/', (req, res) => {
       run(
         `INSERT INTO payments (id, shoot_id, ngay, so_tien, loai, note, created_by, created_at)
          VALUES (?,?,?,?,?,?,?,?)`,
-        [uuid(), sid, now.slice(0, 10), paidAmount, markPaidFull ? 'Tất toán' : 'Đặt cọc', 'Ghi khi tạo khách', req.user!.id, now]
+        [uuid(), sid, now.slice(0, 10), paidAmount, paidFull ? 'Tất toán' : 'Đặt cọc', 'Ghi khi tạo khách', req.user!.id, now]
       );
     }
     createdShoots.push(sid);
-    // Chỉ xác nhận các buổi chưa hủy.
     if ((s.status || 'Đã đặt lịch') !== 'Đã hủy') {
       mailShoots.push({ code, shoot_type: s.shoot_type, shoot_date: s.shoot_date || undefined, customer_name: String(full_name).trim() } as any);
     }

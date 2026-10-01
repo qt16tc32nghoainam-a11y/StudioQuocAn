@@ -10,25 +10,31 @@ interface Customer {
   address?: string; source?: string; note?: string;
 }
 
-interface BookShoot { shoot_type: string; shoot_date?: string; start_time?: string; package_name?: string; total_amount?: number; deposit_amount?: number; paid_full?: boolean }
-const EMPTY: Partial<Customer> & { shoots?: BookShoot[] } = { full_name: '', phone: '', email: '', address: '', source: '', note: '', shoots: [] };
+interface Pkg { id: string; name: string; price: number; unit?: string }
+interface BookShoot { shoot_type: string; shoot_date?: string; start_time?: string; package_id?: string; package_name?: string; total_amount?: number; extra_cost?: number }
+// deposit_amount & paid_full ở CẤP KHÁCH (thu/cọc 1 lần cho cả đơn).
+type CustomerForm = Partial<Customer> & { shoots?: BookShoot[]; deposit_amount?: number; paid_full?: boolean };
+const EMPTY: CustomerForm = { full_name: '', phone: '', email: '', address: '', source: '', note: '', shoots: [], deposit_amount: 0, paid_full: false };
 
 export default function Customers() {
   const { isSale } = useAuth();
   const [list, setList] = useState<Customer[] | null>(null);
   const [q, setQ] = useState('');
-  const [edit, setEdit] = useState<(Partial<Customer> & { shoots?: BookShoot[] }) | null>(null);
+  const [edit, setEdit] = useState<CustomerForm | null>(null);
   const [viewId, setViewId] = useState<string | null>(null);
   const [err, setErr] = useState('');
   const [sources, setSources] = useState<string[]>([]);
   const [bookingTypes, setBookingTypes] = useState<string[]>([]);
-  const [packages, setPackages] = useState<string[]>([]);
+  const [packages, setPackages] = useState<Pkg[]>([]);
 
   const load = () => {
     api.get<Customer[]>(`/customers${q ? `?q=${encodeURIComponent(q)}` : ''}`).then(setList).catch(() => setList([]));
   };
   useEffect(load, [q]);
   useEffect(() => { api.get('/meta/options').then((o) => { setSources(o.sources || []); setBookingTypes(o.bookingTypes || []); setPackages(o.packages || []); }).catch(() => {}); }, []);
+
+  // Tổng giá trị cả đơn = tổng (giá gói + phát sinh) mọi buổi.
+  const grandTotal = (edit?.shoots || []).reduce((sum, s) => sum + (Number(s.total_amount) || 0) + (Number(s.extra_cost) || 0), 0);
 
   const save = async () => {
     if (!edit?.full_name?.trim()) { setErr('Nhập tên khách hàng'); return; }
@@ -38,13 +44,13 @@ export default function Customers() {
     }
     const bookings = (edit.shoots || []).filter((s) => s.shoot_type);
     if (bookings.some((s) => !s.shoot_date)) { setErr('Mỗi buổi chụp cần chọn ngày dự tính'); return; }
-    if (bookings.some((s) => !s.paid_full && Number(s.deposit_amount) > 0 && Number(s.total_amount) > 0 && Number(s.deposit_amount) > Number(s.total_amount))) {
-      setErr('Tiền cọc không được lớn hơn tổng tiền'); return;
+    if (!edit.paid_full && Number(edit.deposit_amount) > grandTotal && grandTotal > 0) {
+      setErr('Tiền cọc không được lớn hơn tổng giá trị các buổi'); return;
     }
     setErr('');
     try {
       if (edit.id) await api.put(`/customers/${edit.id}`, edit);
-      else await api.post('/customers', { ...edit, shoots: bookings });
+      else await api.post('/customers', { ...edit, shoots: bookings, deposit_amount: edit.paid_full ? grandTotal : (Number(edit.deposit_amount) || 0), paid_full: !!edit.paid_full });
       setEdit(null);
       load();
     } catch (e: any) { setErr(e.message); }
@@ -130,13 +136,11 @@ export default function Customers() {
                 <b style={{ fontSize: 14.5 }}>Buổi chụp khách đặt</b>
                 <button type="button" className="btn btn--ghost btn--sm" onClick={() => setEdit({ ...edit, shoots: [...(edit.shoots || []), { shoot_type: bookingTypes[0] || 'Chụp ảnh cổng', shoot_date: '' }] })}>+ Thêm buổi</button>
               </div>
-              <p className="hint" style={{ margin: '2px 0 10px' }}>Khách book nhiều loại cùng lúc thì thêm nhiều dòng. Mỗi buổi sẽ tự lên Lịch làm việc + Google Calendar. (Gán người chụp / giá bổ sung sau trong mục Buổi chụp.)</p>
+              <p className="hint" style={{ margin: '2px 0 10px' }}>Khách book nhiều loại cùng lúc thì thêm nhiều dòng. Chọn gói sẽ tự điền giá; có thể thêm chi phí phát sinh (quay phim, concept thêm…). Mỗi buổi tự lên Lịch + Google Calendar.</p>
               {(edit.shoots || []).length === 0 && <p className="muted" style={{ fontSize: 13 }}>Chưa thêm buổi nào. Có thể để trống và tạo buổi chụp sau.</p>}
               {(edit.shoots || []).map((bk, i) => {
                 const upd = (patch: Partial<BookShoot>) => { const n = [...edit.shoots!]; n[i] = { ...n[i], ...patch }; setEdit({ ...edit, shoots: n }); };
-                const total = Number(bk.total_amount) || 0;
-                const dep = bk.paid_full ? total : (Number(bk.deposit_amount) || 0);
-                const remain = Math.max(0, total - dep);
+                const lineTotal = (Number(bk.total_amount) || 0) + (Number(bk.extra_cost) || 0);
                 return (
                 <div key={i} className="card" style={{ background: '#faf7f2', padding: 12, marginBottom: 10 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -149,9 +153,14 @@ export default function Customers() {
                         {bookingTypes.map((t) => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </Field>
-                    <Field label="Gói dịch vụ">
-                      <input list={`pkg-${i}`} value={bk.package_name || ''} onChange={(e) => upd({ package_name: e.target.value })} placeholder="Chọn hoặc nhập gói" />
-                      <datalist id={`pkg-${i}`}>{packages.map((p) => <option key={p} value={p} />)}</datalist>
+                    <Field label="Gói dịch vụ" hint="Chọn gói sẽ tự điền giá.">
+                      <select value={bk.package_id || ''} onChange={(e) => {
+                        const p = packages.find((x) => x.id === e.target.value);
+                        upd(p ? { package_id: p.id, package_name: p.name, total_amount: Number(p.price) || 0 } : { package_id: '', package_name: '' });
+                      }}>
+                        <option value="">— Chọn gói —</option>
+                        {packages.map((p) => <option key={p.id} value={p.id}>{p.name} ({money(p.price)})</option>)}
+                      </select>
                     </Field>
                   </div>
                   <div className="field-row">
@@ -163,20 +172,36 @@ export default function Customers() {
                     </Field>
                   </div>
                   <div className="field-row">
-                    <Field label="Tổng tiền (đ)">
+                    <Field label="Giá gói (đ)" hint="Tự điền theo gói, sửa được.">
                       <input type="number" value={bk.total_amount ?? 0} onChange={(e) => upd({ total_amount: Number(e.target.value) })} />
                     </Field>
-                    <Field label="Đã cọc (đ)" hint={bk.paid_full ? 'Đã tick thu đủ — bỏ qua ô này.' : (total > 0 ? `Còn lại: ${money(remain)}` : undefined)}>
-                      <input type="number" value={bk.deposit_amount ?? 0} disabled={!!bk.paid_full} onChange={(e) => upd({ deposit_amount: Number(e.target.value) })} />
+                    <Field label="Chi phí phát sinh (đ)" hint="Khách book thêm quay/concept… (có thể để 0).">
+                      <input type="number" value={bk.extra_cost ?? 0} onChange={(e) => upd({ extra_cost: Number(e.target.value) })} />
                     </Field>
                   </div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, marginTop: 4, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={!!bk.paid_full} onChange={(e) => upd({ paid_full: e.target.checked })} />
-                    Khách đã thanh toán đủ
-                  </label>
+                  <div className="muted" style={{ fontSize: 13, textAlign: 'right' }}>Thành tiền buổi: <b style={{ color: 'var(--gold-dark)' }}>{money(lineTotal)}</b></div>
                 </div>
                 );
               })}
+
+              {/* Cọc + thanh toán 1 LẦN cho cả đơn (không theo từng buổi). */}
+              {(edit.shoots || []).length > 0 && (
+                <div className="card" style={{ background: '#f6efe3', padding: 12, marginTop: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <b style={{ fontSize: 14 }}>Thanh toán (cả đơn)</b>
+                    <span className="muted">Tổng giá trị: <b style={{ color: 'var(--gold-dark)' }}>{money(grandTotal)}</b></span>
+                  </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, cursor: 'pointer', marginBottom: 10 }}>
+                    <input type="checkbox" checked={!!edit.paid_full} onChange={(e) => setEdit({ ...edit, paid_full: e.target.checked })} />
+                    Khách đã thanh toán đủ toàn bộ
+                  </label>
+                  {!edit.paid_full && (
+                    <Field label="Tiền cọc (đ)" hint={grandTotal > 0 ? `Còn lại: ${money(Math.max(0, grandTotal - (Number(edit.deposit_amount) || 0)))}` : undefined}>
+                      <input type="number" value={edit.deposit_amount ?? 0} onChange={(e) => setEdit({ ...edit, deposit_amount: Number(e.target.value) })} />
+                    </Field>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </Modal>

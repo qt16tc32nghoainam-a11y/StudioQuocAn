@@ -165,6 +165,25 @@ CREATE TABLE IF NOT EXISTS email_outbox (
   created_at TEXT NOT NULL
 );
 
+-- Gói dịch vụ chụp (bảng giá). Dùng nội bộ cho Sale chọn khi tạo khách;
+-- gói bật "published" sẽ được đổ vào bang-gia.json để công bố lên website.
+CREATE TABLE IF NOT EXISTS service_packages (
+  id TEXT PRIMARY KEY,
+  code TEXT UNIQUE,                 -- mã gói (GP000001)
+  name TEXT NOT NULL,               -- tên gói (VD: "Gói cưới trọn gói VIP")
+  price REAL NOT NULL DEFAULT 0,    -- giá niêm yết
+  unit TEXT,                        -- đơn vị hiển thị (VD: "/gói", "/buổi")
+  description TEXT,                  -- mô tả ngắn
+  items TEXT,                       -- JSON mảng dòng quyền lợi (hiển thị trên website)
+  published INTEGER NOT NULL DEFAULT 0,  -- 1 = công bố lên website, 0 = chỉ nội bộ
+  featured INTEGER NOT NULL DEFAULT 0,   -- 1 = gói nổi bật (badge trên web)
+  sort_order INTEGER DEFAULT 0,
+  created_by TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_shoots_customer ON shoots(customer_id);
 CREATE INDEX IF NOT EXISTS idx_shoots_date ON shoots(shoot_date);
 CREATE INDEX IF NOT EXISTS idx_shoots_status ON shoots(status);
